@@ -5,6 +5,7 @@ import Image from 'next/image';
 import {
   AlertTriangle,
   Bell,
+  BookOpen,
   Building2,
   CalendarDays,
   Camera,
@@ -21,14 +22,18 @@ import {
   Home as HomeIcon,
   Layers3,
   Library,
+  LifeBuoy,
   LocateFixed,
   LogOut,
   MapIcon,
   MapPin,
+  MessageCircle,
   Plus,
   QrCode,
   ReceiptText,
+  Search,
   Scissors,
+  Send,
   Settings2,
   Shield,
   Sparkles,
@@ -42,6 +47,7 @@ import {
   User,
   Users,
   Waves,
+  Wrench,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -92,7 +98,8 @@ type CitizenTab =
   | 'signaler'
   | 'missions'
   | 'credits'
-  | 'profil';
+  | 'profil'
+  | 'help';
 type AuthMode = 'login' | 'signup';
 type ProfileSection =
   | 'info'
@@ -180,6 +187,7 @@ type WebMcpDocument = Document & {
 const sessionKey = 'riskeo-demo-session-v2';
 const onboardingKey = 'riskeo-onboarding-seen-v2';
 const profileKey = 'riskeo-citizen-profile-v1';
+const helpRequestsKey = 'riskeo-help-requests-v1';
 
 const defaultSession: DemoSession = {
   firstName: 'Lucas',
@@ -275,6 +283,31 @@ const recentProfileActivity = [
   },
 ];
 
+type HelpCategory =
+  | 'getting-started'
+  | 'reports'
+  | 'missions'
+  | 'credits'
+  | 'account'
+  | 'safety'
+  | 'contact';
+
+type HelpArticle = {
+  id: string;
+  category: HelpCategory;
+  title: string;
+  summary: string;
+  keywords: string[];
+  content: ReactNode;
+};
+
+type HelpRequest = {
+  id: string;
+  title: string;
+  date: string;
+  status: 'En cours' | 'Résolu' | 'Envoyé';
+};
+
 const categoryOptions: RiskCategory[] = [
   'Vegetation',
   'Arbre dangereux',
@@ -366,6 +399,393 @@ const userMenuItems = [
   },
 ];
 
+const helpCategories: {
+  id: HelpCategory | 'all';
+  label: string;
+  icon: LucideIcon;
+}[] = [
+  { id: 'all', label: 'Tout', icon: HelpCircle },
+  { id: 'getting-started', label: 'Premiers pas', icon: BookOpen },
+  { id: 'reports', label: 'Signalements', icon: Camera },
+  { id: 'missions', label: 'Missions', icon: Trophy },
+  { id: 'credits', label: 'Crédits', icon: Coins },
+  { id: 'account', label: 'Compte', icon: User },
+  { id: 'safety', label: 'Sécurité', icon: Shield },
+  { id: 'contact', label: 'Contact', icon: MessageCircle },
+];
+
+const quickStartItems = [
+  {
+    title: 'Signaler un risque',
+    text: 'Prenez une photo, indiquez la localisation et décrivez le problème.',
+    icon: Camera,
+    articleId: 'report-guide',
+  },
+  {
+    title: 'Suivre mon signalement',
+    text: 'Consultez l’avancement après vérification par la mairie.',
+    icon: ClipboardList,
+    articleId: 'report-follow',
+  },
+  {
+    title: 'Participer à une mission',
+    text: 'Choisissez une mission simple et sélectionnez votre disponibilité.',
+    icon: Trophy,
+    articleId: 'mission-guide',
+  },
+  {
+    title: 'Gagner des crédits',
+    text: 'Les crédits sont ajoutés après validation de vos actions.',
+    icon: Coins,
+    articleId: 'credits-guide',
+  },
+];
+
+const helpArticles: HelpArticle[] = [
+  {
+    id: 'report-guide',
+    category: 'reports',
+    title: 'Faire un signalement',
+    summary:
+      'Les étapes pour envoyer un signalement clair à la mairie de Fondettes.',
+    keywords: ['signalement', 'photo', 'localisation', 'mairie', 'danger'],
+    content: (
+      <HelpNumberedList
+        items={[
+          'Donnez un nom au signalement',
+          'Choisissez le type',
+          'Indiquez le niveau de danger',
+          'Ajoutez la localisation',
+          'Ajoutez une photo',
+          'Décrivez la zone',
+          'Envoyez',
+        ]}
+      />
+    ),
+  },
+  {
+    id: 'report-types',
+    category: 'reports',
+    title: 'Types de signalement',
+    summary: 'Les catégories disponibles dans le formulaire citoyen.',
+    keywords: ['type', 'végétation', 'arbre', 'incendie', 'autre'],
+    content: (
+      <div className="grid gap-2 sm:grid-cols-2">
+        {['Végétation', 'Arbre dangereux', "Risque d'incendie", 'Autre'].map(
+          (type) => (
+            <span
+              key={type}
+              className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] px-3 py-2 text-sm font-bold"
+            >
+              {type}
+            </span>
+          ),
+        )}
+      </div>
+    ),
+  },
+  {
+    id: 'danger-guide',
+    category: 'reports',
+    title: 'Comprendre le niveau de danger',
+    summary: 'Le niveau choisi reste indicatif avant vérification municipale.',
+    keywords: ['danger', 'faible', 'modéré', 'élevé', 'critique'],
+    content: (
+      <div className="grid gap-2">
+        <HelpDefinition
+          title="Faible"
+          text="Situation à surveiller mais sans urgence apparente."
+        />
+        <HelpDefinition
+          title="Modéré"
+          text="Problème visible nécessitant une vérification."
+        />
+        <HelpDefinition
+          title="Élevé"
+          text="Situation présentant un risque important."
+        />
+        <HelpDefinition
+          title="Critique"
+          text="Situation qui semble nécessiter une attention rapide."
+        />
+      </div>
+    ),
+  },
+  {
+    id: 'report-follow',
+    category: 'reports',
+    title: 'Suivre mon signalement',
+    summary:
+      'Après envoi, les services municipaux vérifient et mettent à jour le statut.',
+    keywords: ['statut', 'suivi', 'mairie', 'validation', 'signalement'],
+    content: (
+      <p>
+        Retrouvez vos signalements depuis la carte ou le menu utilisateur. Si un
+        signalement doit être corrigé, contactez la mairie ou envoyez un nouveau
+        signalement avec les informations exactes.
+      </p>
+    ),
+  },
+  {
+    id: 'mission-guide',
+    category: 'missions',
+    title: 'Participer à une mission',
+    summary:
+      'Le parcours pour rejoindre une mission citoyenne et envoyer le résultat.',
+    keywords: [
+      'mission',
+      'créneau',
+      'photo avant',
+      'photo après',
+      'validation',
+    ],
+    content: (
+      <HelpNumberedList
+        items={[
+          'Ouvrez Missions',
+          'Consultez les missions proches de chez vous',
+          'Vérifiez la durée et les consignes',
+          'Choisissez un créneau',
+          'Confirmez votre participation',
+          'Prenez une photo avant de commencer',
+          'Réalisez la mission',
+          'Prenez une photo après',
+          'Envoyez le résultat à la mairie',
+          'Attendez la validation',
+        ]}
+      />
+    ),
+  },
+  {
+    id: 'mission-safety',
+    category: 'safety',
+    title: 'Ma sécurité pendant une mission',
+    summary:
+      'Riskéo ne demande pas aux citoyens de réaliser des interventions dangereuses.',
+    keywords: ['sécurité', 'mission', 'tronçonneuse', 'hauteur', 'danger'],
+    content: (
+      <div>
+        <HelpBulletList
+          items={[
+            'Ne pas utiliser de tronçonneuse',
+            'Ne pas travailler en hauteur',
+            'Ne pas intervenir sur un arbre dangereux',
+            'Ne pas utiliser un matériel que vous ne maîtrisez pas',
+            'Respecter les consignes de la mission',
+            'Arrêter immédiatement si la situation vous paraît dangereuse',
+          ]}
+        />
+        <p className="mt-4 rounded-md border border-[#EBD7B5] bg-[#F7F5F0] p-3 text-sm font-bold text-[#1E3D2F]">
+          En cas de doute, ne réalisez pas la mission et signalez le problème à
+          la mairie.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'emergency',
+    category: 'safety',
+    title: 'En cas d’urgence',
+    summary: 'Riskéo n’est pas un service d’urgence.',
+    keywords: ['urgence', 'danger', 'feu', 'secours'],
+    content: (
+      <p>
+        En cas de danger immédiat pour des personnes ou de départ de feu,
+        contactez directement les services d’urgence compétents.
+      </p>
+    ),
+  },
+  {
+    id: 'credits-guide',
+    category: 'credits',
+    title: 'Comment fonctionnent les crédits ?',
+    summary: 'Les crédits récompensent les actions validées par la mairie.',
+    keywords: ['crédits', 'récompense', 'validation', 'mission'],
+    content: (
+      <div className="grid gap-2">
+        <CreditRule label="Signalement pertinent validé" value="+25 crédits" />
+        <CreditRule
+          label="Signalement menant à une intervention"
+          value="+25 crédits"
+        />
+        <CreditRule label="Vérification terrain" value="+50 crédits" />
+        <CreditRule label="Nettoyage léger" value="+100 crédits" />
+        <CreditRule label="Entretien de végétation" value="+300 crédits" />
+        <CreditRule label="Mission encadrée" value="jusqu’à +600 crédits" />
+      </div>
+    ),
+  },
+  {
+    id: 'credits-spend',
+    category: 'credits',
+    title: 'Utiliser mes crédits',
+    summary:
+      'Les crédits peuvent être échangés contre des récompenses du catalogue Riskéo.',
+    keywords: ['catalogue', 'récompense', 'piscine', 'cinéma', 'commerce'],
+    content: (
+      <div>
+        <HelpBulletList
+          items={[
+            'bons d’achat chez les commerces locaux',
+            'entrée piscine',
+            'terrain sportif',
+            'cinéma',
+            'spectacle',
+            'culture',
+            'bien-être',
+            'restaurant',
+          ]}
+        />
+        <p className="mt-4 text-sm font-semibold text-[#5B7867]">
+          Lorsque vous débloquez une récompense, son coût est retiré de votre
+          solde.
+        </p>
+      </div>
+    ),
+  },
+  {
+    id: 'account-guide',
+    category: 'account',
+    title: 'Mon compte',
+    summary: 'Où modifier vos informations, disponibilités et notifications.',
+    keywords: ['compte', 'profil', 'mot de passe', 'notifications'],
+    content: (
+      <div className="grid gap-2">
+        <HelpDefinition
+          title="Modifier mes informations"
+          text="Profil → Informations personnelles."
+        />
+        <HelpDefinition
+          title="Modifier mes disponibilités"
+          text="Profil → Disponibilités."
+        />
+        <HelpDefinition
+          title="Changer mes notifications"
+          text="Profil → Notifications."
+        />
+        <HelpDefinition
+          title="Modifier mon mot de passe"
+          text="Profil → Sécurité & confidentialité."
+        />
+      </div>
+    ),
+  },
+  {
+    id: 'location-help',
+    category: 'reports',
+    title: 'La localisation ne fonctionne pas',
+    summary:
+      'Vous pouvez toujours envoyer un signalement en saisissant le lieu manuellement.',
+    keywords: ['localisation', 'gps', 'adresse', 'navigateur'],
+    content: (
+      <HelpNumberedList
+        items={[
+          'Vérifiez que le navigateur autorise la localisation',
+          'Réessayez',
+          'Sinon, saisissez l’adresse manuellement',
+        ]}
+      />
+    ),
+  },
+  {
+    id: 'photo-help',
+    category: 'reports',
+    title: 'Je n’arrive pas à ajouter une photo',
+    summary: 'Quelques vérifications simples avant de réessayer.',
+    keywords: ['photo', 'image', 'galerie', 'appareil photo'],
+    content: (
+      <HelpBulletList
+        items={[
+          'vérifier le format de l’image',
+          'essayer une autre photo',
+          'sur mobile, autoriser l’accès à la galerie ou à l’appareil photo si demandé',
+          'actualiser la page en dernier recours',
+        ]}
+      />
+    ),
+  },
+];
+
+const helpFaqItems = [
+  {
+    question: 'Comment signaler un risque ?',
+    answer:
+      'Depuis l’onglet Signaler, renseignez un nom, un type, un niveau de danger, une localisation, une photo et une description.',
+  },
+  {
+    question: 'La photo est-elle obligatoire ?',
+    answer:
+      'Oui. La photo aide la mairie à vérifier plus rapidement le signalement.',
+  },
+  {
+    question: 'Qui valide mon signalement ?',
+    answer:
+      'Les services municipaux vérifient le signalement avant de décider de la suite.',
+  },
+  {
+    question: 'Puis-je modifier un signalement envoyé ?',
+    answer:
+      'Dans cette version, il faut contacter la mairie ou effectuer un nouveau signalement avec les bonnes informations.',
+  },
+  {
+    question: 'Comment rejoindre une mission ?',
+    answer:
+      'Depuis Missions, choisissez une mission disponible puis sélectionnez une date ou un créneau.',
+  },
+  {
+    question: 'Pourquoi dois-je prendre une photo avant et après une mission ?',
+    answer:
+      'Cela permet à la mairie de comparer l’état de la zone et de valider l’intervention.',
+  },
+  {
+    question: 'Quand mes crédits sont-ils ajoutés ?',
+    answer: 'Après validation du signalement ou de la mission par la mairie.',
+  },
+  {
+    question:
+      'Pourquoi un signalement envoyé ne rapporte-t-il pas immédiatement des crédits ?',
+    answer: 'Pour privilégier les signalements réellement utiles et validés.',
+  },
+  {
+    question: 'Où utiliser mes crédits ?',
+    answer:
+      'Dans les commerces locaux et certains équipements ou activités disponibles dans le catalogue Riskéo.',
+  },
+  {
+    question: 'Mes crédits expirent-ils ?',
+    answer: 'Pour le moment : non dans la version actuelle.',
+  },
+  {
+    question: 'Ma mission est terminée mais je n’ai pas reçu mes crédits',
+    answer:
+      'Vérifiez que la mission a bien été envoyée à la mairie et qu’elle a été validée.',
+  },
+  {
+    question: 'Mes crédits ont disparu',
+    answer: 'Vérifiez l’historique des crédits et les récompenses utilisées.',
+  },
+  {
+    question: 'J’ai utilisé une récompense par erreur',
+    answer:
+      'Contactez l’assistance ou la mairie depuis cette page pour demander une vérification.',
+  },
+];
+
+const defaultHelpRequests: HelpRequest[] = [
+  {
+    id: 'help-credits',
+    title: 'Problème de crédits',
+    date: '12 septembre',
+    status: 'En cours',
+  },
+  {
+    id: 'help-mission',
+    title: 'Question sur une mission',
+    date: '4 septembre',
+    status: 'Résolu',
+  },
+];
+
 const onboardingSteps = [
   {
     title: 'Signalez un risque',
@@ -413,7 +833,11 @@ const missionStatuses: Record<Mission['status'], string> = {
 
 export default function Home() {
   const [role, setRole] = useState<Role>('citoyen');
-  const [activeTab, setActiveTab] = useState<CitizenTab>('accueil');
+  const [activeTab, setActiveTab] = useState<CitizenTab>(() =>
+    typeof window !== 'undefined' && window.location.pathname === '/help'
+      ? 'help'
+      : 'accueil',
+  );
   const [profileInitialSection, setProfileInitialSection] =
     useState<ProfileSection>('info');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -439,6 +863,16 @@ export default function Home() {
   const [newMissionAssignee, setNewMissionAssignee] = useState(
     professionals[0].name,
   );
+
+  useEffect(() => {
+    function handleHistoryNavigation() {
+      setActiveTab(window.location.pathname === '/help' ? 'help' : 'accueil');
+    }
+
+    window.addEventListener('popstate', handleHistoryNavigation);
+    return () =>
+      window.removeEventListener('popstate', handleHistoryNavigation);
+  }, []);
 
   const selectedReport =
     reports.find((report) => report.id === selectedReportId) ?? reports[0];
@@ -557,6 +991,28 @@ export default function Home() {
     setSession(data);
   }
 
+  function handleCitizenNavigate(
+    tab: CitizenTab,
+    profileSection?: ProfileSection,
+  ) {
+    setRole('citoyen');
+    if (profileSection) {
+      setProfileInitialSection(profileSection);
+    }
+    setActiveTab(tab);
+
+    if (tab === 'help') {
+      if (window.location.pathname !== '/help') {
+        window.history.pushState(null, '', '/help');
+      }
+      return;
+    }
+
+    if (window.location.pathname === '/help') {
+      window.history.pushState(null, '', '/');
+    }
+  }
+
   function handleReportSubmit(payload: ReportFormPayload) {
     const newReport = createRiskReport(payload);
 
@@ -658,13 +1114,7 @@ export default function Home() {
           setShowUserMenu(false);
         }}
         onMenuToggle={() => setShowUserMenu((visible) => !visible)}
-        onNavigate={(tab, profileSection) => {
-          setRole('citoyen');
-          if (profileSection) {
-            setProfileInitialSection(profileSection);
-          }
-          setActiveTab(tab);
-        }}
+        onNavigate={handleCitizenNavigate}
       />
 
       {role === 'citoyen' ? (
@@ -683,7 +1133,7 @@ export default function Home() {
           onRedeemReward={setSelectedReward}
           onSelectReport={setSelectedReportId}
           onSubmit={handleReportSubmit}
-          onTabChange={setActiveTab}
+          onTabChange={handleCitizenNavigate}
           onValidateMission={validateMissionCredits}
           onLogout={logout}
           onSessionUpdate={updateSession}
@@ -709,7 +1159,10 @@ export default function Home() {
       )}
 
       {role === 'citoyen' ? (
-        <MobileBottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+        <MobileBottomNav
+          activeTab={activeTab}
+          onTabChange={handleCitizenNavigate}
+        />
       ) : null}
 
       {showAuth ? (
@@ -886,7 +1339,15 @@ function ProductHeader({
                 <Building2 size={17} />
                 Acces mairie
               </button>
-              <MenuButton icon={HelpCircle}>Aide</MenuButton>
+              <MenuButton
+                icon={HelpCircle}
+                onClick={() => {
+                  onNavigate('help');
+                  onMenuToggle();
+                }}
+              >
+                Aide
+              </MenuButton>
               <button
                 className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-semibold text-[#D94A3D] hover:bg-[#FFF3EF]"
                 type="button"
@@ -938,7 +1399,7 @@ function CitizenExperience({
   onRedeemReward: (reward: Reward) => void;
   onSelectReport: (id: string) => void;
   onSubmit: (payload: ReportFormPayload) => RiskReport;
-  onTabChange: (tab: CitizenTab) => void;
+  onTabChange: (tab: CitizenTab, profileSection?: ProfileSection) => void;
   onValidateMission: (mission: Mission) => void;
   onLogout: () => void;
   onSessionUpdate: (session: DemoSession) => void;
@@ -1010,6 +1471,8 @@ function CitizenExperience({
           onTabChange={onTabChange}
         />
       ) : null}
+
+      {activeTab === 'help' ? <HelpView onTabChange={onTabChange} /> : null}
     </div>
   );
 }
@@ -1029,7 +1492,7 @@ function CitizenHome({
   selectedReport: RiskReport;
   session: DemoSession;
   onSelectReport: (id: string) => void;
-  onTabChange: (tab: CitizenTab) => void;
+  onTabChange: (tab: CitizenTab, profileSection?: ProfileSection) => void;
 }) {
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_390px]">
@@ -2007,6 +2470,661 @@ function MissionList({
         ))}
       </div>
     </section>
+  );
+}
+
+function HelpView({
+  onTabChange,
+}: {
+  onTabChange: (tab: CitizenTab, profileSection?: ProfileSection) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<HelpCategory | 'all'>(
+    'all',
+  );
+  const [openArticleId, setOpenArticleId] = useState('report-guide');
+  const [openFaqIds, setOpenFaqIds] = useState<string[]>([
+    helpFaqItems[0].question,
+  ]);
+  const [activeForm, setActiveForm] = useState<'city' | 'technical' | null>(
+    null,
+  );
+  const [includeDiagnostics, setIncludeDiagnostics] = useState(true);
+  const [requests, setRequests] = useState<HelpRequest[]>(
+    getInitialHelpRequests,
+  );
+  const [notice, setNotice] = useState('');
+
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setNotice(''), 2400);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  const normalizedQuery = normalizeHelpText(query);
+  const visibleArticles = helpArticles.filter((article) => {
+    const matchesCategory =
+      activeCategory === 'all' || article.category === activeCategory;
+    const searchable = normalizeHelpText(
+      `${article.title} ${article.summary} ${article.keywords.join(' ')}`,
+    );
+    return matchesCategory && searchable.includes(normalizedQuery);
+  });
+  const visibleFaqs = helpFaqItems.filter((item) =>
+    normalizeHelpText(`${item.question} ${item.answer}`).includes(
+      normalizedQuery,
+    ),
+  );
+  const selectedArticle =
+    helpArticles.find((article) => article.id === openArticleId) ??
+    visibleArticles[0] ??
+    helpArticles[0];
+
+  function openArticle(articleId: string) {
+    const article = helpArticles.find((item) => item.id === articleId);
+    if (!article) {
+      return;
+    }
+
+    setActiveCategory(article.category);
+    setOpenArticleId(article.id);
+  }
+
+  function toggleFaq(question: string) {
+    setOpenFaqIds((currentIds) =>
+      currentIds.includes(question)
+        ? currentIds.filter((id) => id !== question)
+        : [...currentIds, question],
+    );
+  }
+
+  function saveHelpRequest(title: string, status: HelpRequest['status']) {
+    const nextRequests = [
+      {
+        id: `help-${Date.now()}`,
+        title,
+        date: new Date().toLocaleDateString('fr-FR', {
+          day: 'numeric',
+          month: 'long',
+        }),
+        status,
+      },
+      ...requests,
+    ].slice(0, 5);
+
+    setRequests(nextRequests);
+    window.localStorage.setItem(helpRequestsKey, JSON.stringify(nextRequests));
+    setNotice('Demande envoyée ✓');
+  }
+
+  function submitCityRequest(event: FormSubmitEvent) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    saveHelpRequest(
+      formString(formData, 'subject', 'Question à la mairie'),
+      'Envoyé',
+    );
+    event.currentTarget.reset();
+  }
+
+  function submitTechnicalRequest(event: FormSubmitEvent) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    saveHelpRequest(
+      `Problème ${formString(formData, 'technicalType', 'Riskéo')}`,
+      'En cours',
+    );
+    event.currentTarget.reset();
+  }
+
+  function submitSuggestion(event: FormSubmitEvent) {
+    event.preventDefault();
+    saveHelpRequest('Suggestion Riskéo', 'Envoyé');
+    event.currentTarget.reset();
+  }
+
+  return (
+    <section className="mx-auto max-w-6xl space-y-5">
+      <section className="brand-card p-5 sm:p-6">
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-end">
+          <div>
+            <p className="text-sm font-extrabold uppercase text-[#5B7867]">
+              Aide
+            </p>
+            <h1 className="mt-2 text-3xl font-extrabold leading-tight">
+              Trouvez rapidement une réponse ou découvrez comment utiliser
+              Riskéo.
+            </h1>
+          </div>
+          <div className="rounded-md border border-[#E0D6C4] bg-[#F7F5F0] p-4 text-sm leading-6 text-[#5B7867]">
+            <p className="font-extrabold text-[#1E3D2F]">
+              Hôtel de Ville de Fondettes
+            </p>
+            <p>35 rue Eugène Goüin, 37230 Fondettes</p>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <Label>Comment pouvons-nous vous aider ?</Label>
+          <div className="mt-2 flex min-h-12 items-center gap-3 rounded-md border border-[#D9DDD8] bg-white px-3 focus-within:border-[#5BA681]">
+            <Search size={19} strokeWidth={1.8} />
+            <input
+              className="h-11 flex-1 bg-transparent text-base font-semibold outline-none placeholder:text-[#7D9485]"
+              placeholder="Rechercher une question..."
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </div>
+          {query ? (
+            <p className="mt-2 text-sm font-semibold text-[#5B7867]">
+              {visibleArticles.length + visibleFaqs.length} résultat
+              {visibleArticles.length + visibleFaqs.length > 1 ? 's' : ''}{' '}
+              trouvé
+              {visibleArticles.length + visibleFaqs.length > 1 ? 's' : ''}
+            </p>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="brand-card p-5 sm:p-6">
+        <SectionTitle>Bien démarrer avec Riskéo</SectionTitle>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {quickStartItems.map((item) => (
+            <button
+              key={item.title}
+              className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-4 text-left transition hover:-translate-y-0.5 hover:border-[#5BA681] hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5BA681]"
+              type="button"
+              onClick={() => openArticle(item.articleId)}
+            >
+              <LineIcon icon={item.icon} />
+              <h2 className="mt-4 font-extrabold">{item.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-[#5B7867]">
+                {item.text}
+              </p>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="brand-card h-fit p-4">
+          <SectionTitle>Catégories</SectionTitle>
+          <div className="mt-4 lg:hidden">
+            <NativeSelect
+              className="w-full"
+              value={activeCategory}
+              onChange={(event) =>
+                setActiveCategory(event.target.value as HelpCategory | 'all')
+              }
+            >
+              {helpCategories.map((category) => (
+                <NativeSelectOption key={category.id} value={category.id}>
+                  {category.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </div>
+          <nav className="mt-4 hidden space-y-2 lg:block">
+            {helpCategories.map((category) => (
+              <HelpCategoryButton
+                key={category.id}
+                active={activeCategory === category.id}
+                icon={category.icon}
+                label={category.label}
+                onClick={() => setActiveCategory(category.id)}
+              />
+            ))}
+          </nav>
+          <div className="mt-5 rounded-md bg-[#F7F5F0] p-3 text-sm leading-6 text-[#5B7867]">
+            <p className="font-bold text-[#1E3D2F]">En cas d’urgence</p>
+            <p>Riskéo n’est pas un service d’urgence.</p>
+          </div>
+        </aside>
+
+        <div className="space-y-5">
+          <section className="brand-card p-5 sm:p-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <SectionTitle>Guides</SectionTitle>
+                <h2 className="mt-4 text-2xl font-extrabold">
+                  {selectedArticle.title}
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-[#5B7867]">
+                  {selectedArticle.summary}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => onTabChange('signaler')}
+                >
+                  <Camera size={16} />
+                  Signaler
+                </Button>
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => onTabChange('missions')}
+                >
+                  <Trophy size={16} />
+                  Missions
+                </Button>
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => onTabChange('credits')}
+                >
+                  <Coins size={16} />
+                  Crédits
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-5 xl:grid-cols-[260px_minmax(0,1fr)]">
+              <div className="grid gap-2">
+                {visibleArticles.length > 0 ? (
+                  visibleArticles.map((article) => (
+                    <button
+                      key={article.id}
+                      className={`rounded-md border px-3 py-3 text-left text-sm font-bold transition ${
+                        selectedArticle.id === article.id
+                          ? 'border-[#1E3D2F] bg-[#EEF1EE] text-[#1E3D2F]'
+                          : 'border-[#D9DDD8] bg-white text-[#5B7867] hover:border-[#5BA681]'
+                      }`}
+                      type="button"
+                      onClick={() => setOpenArticleId(article.id)}
+                    >
+                      {article.title}
+                    </button>
+                  ))
+                ) : (
+                  <p className="rounded-md border border-[#D9DDD8] bg-white p-3 text-sm font-semibold text-[#5B7867]">
+                    Aucun guide ne correspond à votre recherche.
+                  </p>
+                )}
+              </div>
+
+              <article className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-4 text-sm leading-6">
+                {selectedArticle.content}
+                {selectedArticle.id === 'report-guide' ? (
+                  <p className="mt-4 rounded-md bg-[#F7F5F0] p-3 font-semibold text-[#5B7867]">
+                    Décrivez uniquement ce que vous observez. La mairie se
+                    charge de vérifier le niveau réel de priorité.
+                  </p>
+                ) : null}
+                {selectedArticle.id === 'danger-guide' ? (
+                  <p className="mt-4 rounded-md bg-[#F7F5F0] p-3 font-semibold text-[#5B7867]">
+                    Le niveau choisi par le citoyen reste indicatif. La mairie
+                    peut le modifier après vérification.
+                  </p>
+                ) : null}
+              </article>
+            </div>
+          </section>
+
+          <section className="brand-card p-5 sm:p-6">
+            <SectionTitle>Questions fréquentes</SectionTitle>
+            <div className="mt-5 divide-y divide-[#E0D6C4] rounded-md border border-[#D9DDD8] bg-[#FFFDF8]">
+              {visibleFaqs.length > 0 ? (
+                visibleFaqs.map((item) => (
+                  <HelpAccordion
+                    key={item.question}
+                    answer={item.answer}
+                    open={openFaqIds.includes(item.question)}
+                    question={item.question}
+                    onToggle={() => toggleFaq(item.question)}
+                  />
+                ))
+              ) : (
+                <p className="p-4 text-sm font-semibold text-[#5B7867]">
+                  Aucune question ne correspond à votre recherche.
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section className="grid gap-5 xl:grid-cols-2">
+            <HelpActionCard
+              icon={Building2}
+              title="Contacter les services municipaux"
+              text="Pour une question concernant un signalement ou une mission."
+              buttonLabel="Contacter la mairie"
+              active={activeForm === 'city'}
+              onClick={() => setActiveForm('city')}
+            />
+            <HelpActionCard
+              icon={Wrench}
+              title="Un problème avec Riskéo ?"
+              text="Connexion, carte, signalement, mission, crédits ou profil."
+              buttonLabel="Signaler un problème technique"
+              active={activeForm === 'technical'}
+              onClick={() => setActiveForm('technical')}
+            />
+          </section>
+
+          {activeForm === 'city' ? (
+            <section className="brand-card p-5 sm:p-6">
+              <SectionTitle>Contacter la mairie</SectionTitle>
+              <form className="mt-5 grid gap-4" onSubmit={submitCityRequest}>
+                <Field label="Sujet">
+                  <Input
+                    name="subject"
+                    required
+                    placeholder="Objet de votre demande"
+                  />
+                </Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Catégorie">
+                    <NativeSelect className="w-full" name="category">
+                      <NativeSelectOption value="Signalement">
+                        Question concernant un signalement
+                      </NativeSelectOption>
+                      <NativeSelectOption value="Mission">
+                        Question concernant une mission
+                      </NativeSelectOption>
+                    </NativeSelect>
+                  </Field>
+                  <Field label="Référence facultative">
+                    <Input name="reference" placeholder="SIG-248 ou MIS-102" />
+                  </Field>
+                </div>
+                <Field label="Message">
+                  <Textarea
+                    className="min-h-28"
+                    name="message"
+                    required
+                    placeholder="Expliquez votre demande simplement."
+                  />
+                </Field>
+                <Button
+                  className="h-11 rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+                  type="submit"
+                >
+                  <Send size={16} />
+                  Envoyer la demande
+                </Button>
+              </form>
+            </section>
+          ) : null}
+
+          {activeForm === 'technical' ? (
+            <section className="brand-card p-5 sm:p-6">
+              <SectionTitle>Problème technique</SectionTitle>
+              <form
+                className="mt-5 grid gap-4"
+                onSubmit={submitTechnicalRequest}
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Type de problème">
+                    <NativeSelect className="w-full" name="technicalType">
+                      {[
+                        'Connexion',
+                        'Carte',
+                        'Signalement',
+                        'Mission',
+                        'Crédits',
+                        'Profil',
+                        'Autre',
+                      ].map((type) => (
+                        <NativeSelectOption key={type} value={type}>
+                          {type}
+                        </NativeSelectOption>
+                      ))}
+                    </NativeSelect>
+                  </Field>
+                  <Field label="Page concernée">
+                    <Input name="page" placeholder="Ex. Signaler" />
+                  </Field>
+                </div>
+                <Field label="Description">
+                  <Textarea
+                    className="min-h-28"
+                    name="description"
+                    required
+                    placeholder="Décrivez ce qui bloque."
+                  />
+                </Field>
+                <CheckRow
+                  checked={includeDiagnostics}
+                  label="Inclure les informations techniques utiles au diagnostic"
+                  onChange={setIncludeDiagnostics}
+                />
+                <Button
+                  className="h-11 rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+                  type="submit"
+                >
+                  <LifeBuoy size={16} />
+                  Envoyer le signalement
+                </Button>
+              </form>
+            </section>
+          ) : null}
+
+          <section className="brand-card p-5 sm:p-6">
+            <SectionTitle>Une idée pour améliorer Riskéo ?</SectionTitle>
+            <form className="mt-5 grid gap-4" onSubmit={submitSuggestion}>
+              <Field label="Partagez-nous votre suggestion">
+                <Textarea
+                  className="min-h-24"
+                  name="suggestion"
+                  required
+                  placeholder="Votre idée..."
+                />
+              </Field>
+              <Button
+                className="w-fit rounded-md"
+                type="submit"
+                variant="outline"
+              >
+                Envoyer ma suggestion
+              </Button>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section className="brand-card p-5 sm:p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <SectionTitle>Mes demandes</SectionTitle>
+            <p className="mt-3 text-sm leading-6 text-[#5B7867]">
+              Les demandes sont conservées localement dans ce prototype.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => onTabChange('profil', 'notifications')}
+            >
+              <Bell size={16} />
+              Notifications
+            </Button>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => onTabChange('profil', 'security')}
+            >
+              <Shield size={16} />
+              Sécurité
+            </Button>
+          </div>
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {requests.map((request) => (
+            <article
+              key={request.id}
+              className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-extrabold">{request.title}</h3>
+                  <p className="mt-1 text-sm font-semibold text-[#5B7867]">
+                    Envoyé le {request.date}
+                  </p>
+                </div>
+                <span className="rounded-full bg-[#EEF1EE] px-2 py-1 text-xs font-bold text-[#1E3D2F]">
+                  {request.status}
+                </span>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      {notice ? (
+        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-md bg-[#1E3D2F] px-4 py-3 text-sm font-bold text-white shadow-xl md:bottom-6">
+          {notice}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function HelpCategoryButton({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-sm font-bold transition ${
+        active
+          ? 'bg-[#EEF1EE] text-[#1E3D2F]'
+          : 'text-[#5B7867] hover:bg-[#F7F5F0] hover:text-[#1E3D2F]'
+      }`}
+      type="button"
+      onClick={onClick}
+    >
+      <Icon size={17} strokeWidth={1.8} />
+      {label}
+    </button>
+  );
+}
+
+function HelpAccordion({
+  answer,
+  open,
+  question,
+  onToggle,
+}: {
+  answer: string;
+  open: boolean;
+  question: string;
+  onToggle: () => void;
+}) {
+  return (
+    <div>
+      <button
+        className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left font-extrabold transition hover:bg-[#F7F5F0]"
+        type="button"
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span>{question}</span>
+        <ChevronDown
+          className={`shrink-0 transition ${open ? 'rotate-180' : ''}`}
+          size={18}
+        />
+      </button>
+      {open ? (
+        <p className="px-4 pb-4 text-sm leading-6 text-[#5B7867]">{answer}</p>
+      ) : null}
+    </div>
+  );
+}
+
+function HelpActionCard({
+  active,
+  buttonLabel,
+  icon: Icon,
+  text,
+  title,
+  onClick,
+}: {
+  active: boolean;
+  buttonLabel: string;
+  icon: LucideIcon;
+  text: string;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <section
+      className={`brand-card p-5 transition ${
+        active ? 'ring-2 ring-[#5BA681]' : ''
+      }`}
+    >
+      <LineIcon icon={Icon} />
+      <h2 className="mt-4 text-xl font-extrabold">{title}</h2>
+      <p className="mt-2 text-sm leading-6 text-[#5B7867]">{text}</p>
+      <Button
+        className="mt-5 h-11 rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+        type="button"
+        onClick={onClick}
+      >
+        {buttonLabel}
+      </Button>
+    </section>
+  );
+}
+
+function HelpNumberedList({ items }: { items: string[] }) {
+  return (
+    <ol className="space-y-2">
+      {items.map((item, index) => (
+        <li key={item} className="flex gap-3">
+          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#1E3D2F] text-xs font-extrabold text-white">
+            {index + 1}
+          </span>
+          <span className="pt-1 font-semibold text-[#1E3D2F]">{item}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function HelpBulletList({ items }: { items: string[] }) {
+  return (
+    <ul className="space-y-2">
+      {items.map((item) => (
+        <li key={item} className="flex gap-3">
+          <CheckCircle2 className="mt-0.5 shrink-0 text-[#5BA681]" size={18} />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function HelpDefinition({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-md border border-[#D9DDD8] bg-white p-3">
+      <p className="font-extrabold text-[#1E3D2F]">{title}</p>
+      <p className="mt-1 text-sm leading-6 text-[#5B7867]">{text}</p>
+    </div>
+  );
+}
+
+function CreditRule({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-md border border-[#D9DDD8] bg-white px-3 py-2">
+      <span className="font-semibold">{label}</span>
+      <span className="shrink-0 rounded-md bg-[#EEF1EE] px-2 py-1 text-sm font-extrabold text-[#1E3D2F]">
+        {value}
+      </span>
+    </div>
   );
 }
 
@@ -4717,6 +5835,31 @@ function getInitialProfile(session: DemoSession): ProfileData {
   } catch {
     return mergeProfileData(profileSession);
   }
+}
+
+function getInitialHelpRequests(): HelpRequest[] {
+  if (typeof window === 'undefined') {
+    return defaultHelpRequests;
+  }
+
+  const storedRequests = window.localStorage.getItem(helpRequestsKey);
+  if (!storedRequests) {
+    return defaultHelpRequests;
+  }
+
+  try {
+    const parsedRequests = JSON.parse(storedRequests) as HelpRequest[];
+    return Array.isArray(parsedRequests) ? parsedRequests : defaultHelpRequests;
+  } catch {
+    return defaultHelpRequests;
+  }
+}
+
+function normalizeHelpText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 function formString(formData: FormData, key: string, fallback: string) {

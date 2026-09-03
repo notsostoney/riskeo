@@ -1102,10 +1102,18 @@ function ReportForm({
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        setLocationCoords({
+        const detectedPosition = {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
+        };
+
+        setLocationCoords({
+          lat: detectedPosition.lat,
+          lng: detectedPosition.lng,
         });
+        setAddress(
+          `Position actuelle détectée (${detectedPosition.lat.toFixed(5)}, ${detectedPosition.lng.toFixed(5)})`,
+        );
         setLocationStatus('success');
         setErrors((currentErrors) => ({
           ...currentErrors,

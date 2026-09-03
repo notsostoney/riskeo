@@ -1,6 +1,7 @@
 export type RiskCategory =
   | 'Vegetation'
   | 'Arbre dangereux'
+  | "Risque d'incendie"
   | 'Acces secours'
   | 'Orage'
   | 'Autre';

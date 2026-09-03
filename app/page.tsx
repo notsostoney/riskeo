@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarDays,
   Camera,
+  CheckCircle2,
   ChevronDown,
   Circle,
   ClipboardList,
@@ -49,6 +50,7 @@ import {
 import type {
   DangerLevel,
   Mission,
+  GeoPoint,
   RiskCategory,
   RiskReport,
 } from '@/lib/risk-types';
@@ -102,6 +104,20 @@ const categoryOptions: RiskCategory[] = [
 ];
 
 const dangerOptions: DangerLevel[] = ['Faible', 'Modere', 'Eleve', 'Critique'];
+
+const reportTypeOptions: { value: RiskCategory; label: string }[] = [
+  { value: 'Vegetation', label: 'Végétation' },
+  { value: 'Arbre dangereux', label: 'Arbre dangereux' },
+  { value: "Risque d'incendie", label: "Risque d'incendie" },
+  { value: 'Autre', label: 'Autre' },
+];
+
+const reportDangerOptions: { value: DangerLevel; label: string }[] = [
+  { value: 'Faible', label: 'Faible' },
+  { value: 'Modere', label: 'Modéré' },
+  { value: 'Eleve', label: 'Élevé' },
+  { value: 'Critique', label: 'Critique' },
+];
 
 const headerCounters = [
   { value: 7, label: 'Signalements' },
@@ -182,8 +198,6 @@ export default function Home() {
   const [reports, setReports] = useState<RiskReport[]>(initialRiskReports);
   const [missions, setMissions] = useState<Mission[]>(initialMissions);
   const [selectedReportId, setSelectedReportId] = useState(reports[0].id);
-  const [photoLabel, setPhotoLabel] = useState('Aucune photo');
-  const [located, setLocated] = useState(false);
   const [newMissionDate, setNewMissionDate] = useState('18 sept.');
   const [newMissionAssignee, setNewMissionAssignee] = useState(
     professionals[0].name,
@@ -301,25 +315,12 @@ export default function Home() {
     setShowAuth(true);
   }
 
-  function handleReportSubmit(event: FormSubmitEvent) {
-    event.preventDefault();
-    const formData = new FormData(event.currentTarget);
-    const newReport = createRiskReport({
-      title: formString(formData, 'title', 'Nouveau signalement'),
-      category: formString(formData, 'category', 'Vegetation') as RiskCategory,
-      danger: formString(formData, 'danger', 'Modere') as DangerLevel,
-      address: formString(formData, 'address', 'Fondettes'),
-      description: formString(formData, 'description', ''),
-      photoLabel,
-      located,
-    });
+  function handleReportSubmit(payload: ReportFormPayload) {
+    const newReport = createRiskReport(payload);
 
     setReports((currentReports) => [newReport, ...currentReports]);
     setSelectedReportId(newReport.id);
-    setActiveTab('carte');
-    setPhotoLabel('Aucune photo');
-    setLocated(false);
-    event.currentTarget.reset();
+    return newReport;
   }
 
   function handleMissionCreate(event: FormSubmitEvent) {
@@ -367,15 +368,11 @@ export default function Home() {
       {role === 'citoyen' ? (
         <CitizenExperience
           activeTab={activeTab}
-          located={located}
           missions={missions}
           nearbyRisks={nearbyRisks}
-          photoLabel={photoLabel}
           reports={reports}
           selectedReport={selectedReport}
           session={session ?? defaultSession}
-          onLocate={() => setLocated(true)}
-          onPhoto={(label) => setPhotoLabel(label)}
           onSelectReport={setSelectedReportId}
           onSubmit={handleReportSubmit}
           onTabChange={setActiveTab}
@@ -430,6 +427,24 @@ type FormSubmitEvent = {
   preventDefault: () => void;
   currentTarget: HTMLFormElement;
 };
+
+type ReportFormPayload = {
+  title: string;
+  category: RiskCategory;
+  danger: DangerLevel;
+  address: string;
+  description: string;
+  photoLabel: string;
+  located: boolean;
+  geo?: GeoPoint;
+};
+
+type ReportFormErrors = Partial<
+  Record<
+    'title' | 'category' | 'danger' | 'address' | 'photo' | 'description',
+    string
+  >
+>;
 
 function ProductHeader({
   activeTab,
@@ -551,31 +566,23 @@ function ProductHeader({
 
 function CitizenExperience({
   activeTab,
-  located,
   missions,
   nearbyRisks,
-  photoLabel,
   reports,
   selectedReport,
   session,
-  onLocate,
-  onPhoto,
   onSelectReport,
   onSubmit,
   onTabChange,
 }: {
   activeTab: CitizenTab;
-  located: boolean;
   missions: Mission[];
   nearbyRisks: RiskReport[];
-  photoLabel: string;
   reports: RiskReport[];
   selectedReport: RiskReport;
   session: DemoSession;
-  onLocate: () => void;
-  onPhoto: (label: string) => void;
   onSelectReport: (id: string) => void;
-  onSubmit: (event: FormSubmitEvent) => void;
+  onSubmit: (payload: ReportFormPayload) => RiskReport;
   onTabChange: (tab: CitizenTab) => void;
 }) {
   return (
@@ -603,10 +610,7 @@ function CitizenExperience({
       {activeTab === 'signaler' ? (
         <div className="mx-auto max-w-2xl">
           <ReportForm
-            located={located}
-            photoLabel={photoLabel}
-            onLocate={onLocate}
-            onPhoto={onPhoto}
+            onViewReport={() => onTabChange('carte')}
             onSubmit={onSubmit}
           />
         </div>
@@ -1016,106 +1020,399 @@ function OnboardingModal({
 }
 
 function ReportForm({
-  located,
-  photoLabel,
-  onLocate,
-  onPhoto,
   onSubmit,
+  onViewReport,
 }: {
-  located: boolean;
-  photoLabel: string;
-  onLocate: () => void;
-  onPhoto: (label: string) => void;
-  onSubmit: (event: FormSubmitEvent) => void;
+  onSubmit: (payload: ReportFormPayload) => RiskReport;
+  onViewReport: () => void;
 }) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState<RiskCategory | ''>('');
+  const [danger, setDanger] = useState<DangerLevel | ''>('');
+  const [address, setAddress] = useState('');
+  const [description, setDescription] = useState('');
+  const [photoLabel, setPhotoLabel] = useState('Aucune photo');
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [locationCoords, setLocationCoords] = useState<GeoPoint | null>(null);
+  const [locationStatus, setLocationStatus] = useState<
+    'idle' | 'success' | 'error'
+  >('idle');
+  const [errors, setErrors] = useState<ReportFormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isConfirmed, setIsConfirmed] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (photoPreview) {
+        URL.revokeObjectURL(photoPreview);
+      }
+    };
+  }, [photoPreview]);
+
+  function updateField<Key extends keyof ReportFormErrors>(
+    key: Key,
+    updater: () => void,
+  ) {
+    updater();
+    setErrors((currentErrors) => ({ ...currentErrors, [key]: undefined }));
+  }
+
+  function validateForm() {
+    const nextErrors: ReportFormErrors = {};
+
+    if (!title.trim()) {
+      nextErrors.title = 'Indiquez le nom du signalement.';
+    }
+
+    if (!category) {
+      nextErrors.category = 'Sélectionnez un type de risque.';
+    }
+
+    if (!danger) {
+      nextErrors.danger = 'Sélectionnez un niveau de danger.';
+    }
+
+    if (!address.trim() && !locationCoords) {
+      nextErrors.address = 'Renseignez une localisation.';
+    }
+
+    if (!photoPreview) {
+      nextErrors.photo = 'Ajoutez une photo du terrain.';
+    }
+
+    if (!description.trim()) {
+      nextErrors.description = 'Décrivez brièvement la situation.';
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  }
+
+  function handleLocate() {
+    if (!navigator.geolocation) {
+      setLocationStatus('error');
+      setErrors((currentErrors) => ({
+        ...currentErrors,
+        address:
+          'Impossible de récupérer votre position. Vous pouvez renseigner l’adresse manuellement.',
+      }));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocationCoords({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setLocationStatus('success');
+        setErrors((currentErrors) => ({
+          ...currentErrors,
+          address: undefined,
+        }));
+      },
+      () => {
+        setLocationStatus('error');
+        setErrors((currentErrors) => ({
+          ...currentErrors,
+          address:
+            'Impossible de récupérer votre position. Vous pouvez renseigner l’adresse manuellement.',
+        }));
+      },
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 7000 },
+    );
+  }
+
+  function handlePhotoChange(file?: File) {
+    if (!file) {
+      return;
+    }
+
+    setPhotoPreview((currentPreview) => {
+      if (currentPreview) {
+        URL.revokeObjectURL(currentPreview);
+      }
+
+      return URL.createObjectURL(file);
+    });
+    setPhotoLabel(file.name || 'Photo ajoutée');
+    setErrors((currentErrors) => ({ ...currentErrors, photo: undefined }));
+  }
+
+  function removePhoto() {
+    setPhotoPreview((currentPreview) => {
+      if (currentPreview) {
+        URL.revokeObjectURL(currentPreview);
+      }
+
+      return null;
+    });
+    setPhotoLabel('Aucune photo');
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+
+  function resetForm() {
+    setTitle('');
+    setCategory('');
+    setDanger('');
+    setAddress('');
+    setDescription('');
+    setPhotoLabel('Aucune photo');
+    setPhotoPreview((currentPreview) => {
+      if (currentPreview) {
+        URL.revokeObjectURL(currentPreview);
+      }
+
+      return null;
+    });
+    setLocationCoords(null);
+    setLocationStatus('idle');
+    setErrors({});
+    setIsConfirmed(false);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }
+
+  function handleSubmit(event: FormSubmitEvent) {
+    event.preventDefault();
+
+    if (!validateForm() || !category || !danger) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    window.setTimeout(() => {
+      onSubmit({
+        title: title.trim(),
+        category,
+        danger,
+        address: address.trim() || 'Position GPS à Fondettes',
+        description: description.trim(),
+        photoLabel,
+        located: Boolean(locationCoords),
+        geo: locationCoords ?? undefined,
+      });
+      setIsSubmitting(false);
+      setIsConfirmed(true);
+    }, 500);
+  }
+
   return (
     <section className="brand-card p-5 sm:p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold">Signaler un risque</h1>
-          <p className="mt-1 text-[#5B7867]">
-            Un signalement clair aide la mairie à vérifier rapidement.
-          </p>
-        </div>
-        <LineIcon icon={Camera} />
+      <div>
+        <h1 className="text-2xl font-extrabold">Signaler un risque</h1>
+        <p className="mt-1 text-[#5B7867]">
+          Un signalement clair aide la mairie à vérifier rapidement.
+        </p>
       </div>
 
-      <form className="mt-6 space-y-4" onSubmit={onSubmit}>
-        <Field label="Signalement">
-          <Input name="title" placeholder="Végétation à risque" required />
-        </Field>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="Type">
-            <NativeSelect name="category" className="w-full">
-              {categoryOptions.map((category) => (
-                <NativeSelectOption key={category} value={category}>
-                  {category}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-          <Field label="Danger">
-            <NativeSelect name="danger" className="w-full">
-              {dangerOptions.map((danger) => (
-                <NativeSelectOption key={danger} value={danger}>
-                  {danger}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </Field>
-        </div>
-
-        <Field label="Localisation">
-          <div className="flex gap-2">
-            <Input
-              name="address"
-              placeholder="Chemin ou secteur de Fondettes"
-              required
-            />
-            <Button type="button" variant="outline" onClick={onLocate}>
-              <LocateFixed size={16} />
+      {isConfirmed ? (
+        <div className="mt-6 rounded-md border border-[#A8C5B1] bg-[#F7F5F0] p-5">
+          <div className="flex items-start gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-md bg-[#1E3D2F] text-white">
+              <CheckCircle2 size={22} />
+            </span>
+            <div>
+              <h2 className="text-xl font-extrabold">Signalement envoyé ✓</h2>
+              <p className="mt-2 text-sm leading-6 text-[#5B7867]">
+                Merci Lucas. Votre signalement a bien été transmis aux services
+                municipaux de Fondettes.
+              </p>
+            </div>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+            <Button
+              className="h-11 rounded-md bg-[#D9643D] text-base font-bold text-white hover:bg-[#C6532E]"
+              type="button"
+              onClick={onViewReport}
+            >
+              Voir mon signalement
+            </Button>
+            <Button variant="outline" type="button" onClick={resetForm}>
+              Faire un nouveau signalement
             </Button>
           </div>
-          <p className="text-sm text-[#5B7867]">
-            {located
-              ? 'Position ajoutée au signalement.'
-              : 'Position à confirmer.'}
-          </p>
-        </Field>
+        </div>
+      ) : (
+        <form className="mt-6 space-y-4" noValidate onSubmit={handleSubmit}>
+          <Field error={errors.title} label="Signalement">
+            <Input
+              aria-invalid={Boolean(errors.title)}
+              name="title"
+              placeholder="Ex. Végétation sèche chemin des Pins"
+              required
+              value={title}
+              onChange={(event) =>
+                updateField('title', () => setTitle(event.target.value))
+              }
+            />
+          </Field>
 
-        <Field label="Photo">
-          <label className="field-upload">
-            <Upload className="mb-2 text-[#1E3D2F]" size={22} />
-            <span className="font-bold">{photoLabel}</span>
-            <span className="text-[#5B7867]">Ajouter une photo du terrain</span>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field error={errors.category} label="Type">
+              <NativeSelect
+                aria-invalid={Boolean(errors.category)}
+                className="w-full"
+                name="category"
+                required
+                value={category}
+                onChange={(event) =>
+                  updateField('category', () =>
+                    setCategory(event.target.value as RiskCategory),
+                  )
+                }
+              >
+                <NativeSelectOption value="" disabled>
+                  Sélectionner
+                </NativeSelectOption>
+                {reportTypeOptions.map((option) => (
+                  <NativeSelectOption key={option.value} value={option.value}>
+                    {option.label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+            <Field error={errors.danger} label="Danger">
+              <NativeSelect
+                aria-invalid={Boolean(errors.danger)}
+                className={`w-full ${danger ? dangerStyles[danger] : ''}`}
+                name="danger"
+                required
+                value={danger}
+                onChange={(event) =>
+                  updateField('danger', () =>
+                    setDanger(event.target.value as DangerLevel),
+                  )
+                }
+              >
+                <NativeSelectOption value="" disabled>
+                  Sélectionner
+                </NativeSelectOption>
+                {reportDangerOptions.map((option) => (
+                  <NativeSelectOption key={option.value} value={option.value}>
+                    {option.label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </Field>
+          </div>
+
+          <Field error={errors.address} label="Localisation">
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <Input
+                aria-invalid={Boolean(errors.address)}
+                name="address"
+                placeholder="Adresse ou lieu à Fondettes"
+                required
+                value={address}
+                onChange={(event) =>
+                  updateField('address', () => setAddress(event.target.value))
+                }
+              />
+              <Button
+                aria-label="Me localiser"
+                className="h-10 px-3"
+                type="button"
+                variant="outline"
+                onClick={handleLocate}
+              >
+                <LocateFixed size={17} />
+              </Button>
+            </div>
+            {locationStatus === 'success' ? (
+              <p className="text-sm text-[#5B7867]">
+                Position ajoutée au signalement.
+              </p>
+            ) : null}
+          </Field>
+
+          <Field error={errors.photo} label="Photo">
+            <button
+              aria-label="Ajouter une photo du terrain"
+              className="field-upload"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {photoPreview ? (
+                <Image
+                  alt="Aperçu ajouté"
+                  className="h-52 w-full rounded-md object-cover"
+                  height={360}
+                  unoptimized
+                  width={640}
+                  src={photoPreview}
+                />
+              ) : (
+                <>
+                  <Upload className="mb-2 text-[#1E3D2F]" size={22} />
+                  <span className="font-bold">Aucune photo</span>
+                  <span className="text-[#5B7867]">
+                    Ajouter une photo du terrain
+                  </span>
+                </>
+              )}
+            </button>
+            {photoPreview ? (
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Modifier
+                </Button>
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                  onClick={removePhoto}
+                >
+                  Supprimer
+                </Button>
+              </div>
+            ) : null}
             <input
+              ref={fileInputRef}
               className="sr-only"
               name="photo"
               type="file"
               accept="image/*"
+              onChange={(event) => handlePhotoChange(event.target.files?.[0])}
+            />
+          </Field>
+
+          <Field error={errors.description} label="Description">
+            <Textarea
+              aria-invalid={Boolean(errors.description)}
+              className="min-h-32"
+              name="description"
+              placeholder="Décrivez la zone, l’urgence et les conditions d’accès."
+              required
+              value={description}
               onChange={(event) =>
-                onPhoto(event.target.files?.[0]?.name ?? 'Aucune photo')
+                updateField('description', () =>
+                  setDescription(event.target.value),
+                )
               }
             />
-          </label>
-        </Field>
+          </Field>
 
-        <Field label="Description">
-          <Textarea
-            name="description"
-            placeholder="Décrivez simplement la zone, l’accès et ce qui vous semble urgent."
-            required
-          />
-        </Field>
-
-        <Button
-          type="submit"
-          className="h-12 w-full rounded-md bg-[#D9643D] text-base font-bold text-white hover:bg-[#C6532E]"
-        >
-          Envoyer le signalement
-        </Button>
-      </form>
+          <Button
+            className="h-12 w-full rounded-md bg-[#D9643D] text-base font-bold text-white hover:bg-[#C6532E] disabled:opacity-70"
+            disabled={isSubmitting}
+            type="submit"
+          >
+            {isSubmitting ? 'Envoi en cours...' : 'Envoyer le signalement'}
+          </Button>
+        </form>
+      )}
     </section>
   );
 }
@@ -1809,11 +2106,22 @@ function SearchIcon() {
   return <Eye size={17} />;
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  children,
+  error,
+}: {
+  label: string;
+  children: ReactNode;
+  error?: string;
+}) {
   return (
     <div className="space-y-2">
       <Label>{label}</Label>
       {children}
+      {error ? (
+        <p className="text-sm font-semibold text-[#D94A3D]">{error}</p>
+      ) : null}
     </div>
   );
 }
@@ -1826,6 +2134,7 @@ function createRiskReport(payload: {
   description?: string;
   photoLabel?: string;
   located?: boolean;
+  geo?: GeoPoint;
 }): RiskReport {
   return {
     id: `SIG-${Math.floor(300 + Math.random() * 600)}`,
@@ -1842,8 +2151,10 @@ function createRiskReport(payload: {
       y: 22 + Math.round(Math.random() * 55),
     },
     geo: {
-      lat: fondettesCenter.lat + (Math.random() - 0.5) * 0.028,
-      lng: fondettesCenter.lng + (Math.random() - 0.5) * 0.05,
+      lat:
+        payload.geo?.lat ?? fondettesCenter.lat + (Math.random() - 0.5) * 0.028,
+      lng:
+        payload.geo?.lng ?? fondettesCenter.lng + (Math.random() - 0.5) * 0.05,
     },
     description: payload.description || '',
     photoLabel: payload.photoLabel || 'photo-terrain.jpg',

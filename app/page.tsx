@@ -342,7 +342,6 @@ const citizenNav = [
   { id: 'signaler' as const, label: 'Signaler', icon: Camera },
   { id: 'missions' as const, label: 'Missions', icon: Trophy },
   { id: 'credits' as const, label: 'Crédits', icon: Coins },
-  { id: 'profil' as const, label: 'Profil', icon: User },
 ];
 
 const userMenuItems = [
@@ -4269,7 +4268,7 @@ function MobileBottomNav({
   onTabChange: (tab: CitizenTab) => void;
 }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-[#D9DDD8] bg-[#FFFDF8] px-1 pb-2 pt-1 md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-[#D9DDD8] bg-[#FFFDF8] px-2 pb-2 pt-1 md:hidden">
       {citizenNav.map((item) => {
         const Icon = item.icon;
         const active = activeTab === item.id;
@@ -4277,7 +4276,7 @@ function MobileBottomNav({
         return (
           <button
             key={item.id}
-            className={`flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[10px] font-bold ${
+            className={`flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[11px] font-bold ${
               active ? 'text-[#D9643D]' : 'text-[#5B7867]'
             }`}
             type="button"

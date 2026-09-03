@@ -952,7 +952,10 @@ function AuthModal({
               Se souvenir de moi
             </label>
           )}
-          <Button className="h-11 w-full rounded-md bg-[#1E3D2F] text-white hover:bg-[#123426]">
+          <Button
+            type="submit"
+            className="h-11 w-full rounded-md bg-[#1E3D2F] text-white hover:bg-[#123426]"
+          >
             {authMode === 'signup' ? 'Créer mon compte' : 'Se connecter'}
           </Button>
         </form>
@@ -1120,7 +1123,10 @@ function ReportForm({
           />
         </Field>
 
-        <Button className="h-12 w-full rounded-md bg-[#D9643D] text-base font-bold text-white hover:bg-[#C6532E]">
+        <Button
+          type="submit"
+          className="h-12 w-full rounded-md bg-[#D9643D] text-base font-bold text-white hover:bg-[#C6532E]"
+        >
           Envoyer le signalement
         </Button>
       </form>
@@ -1297,7 +1303,10 @@ function MissionCreateForm({
             defaultValue={selectedReport.description}
           />
         </Field>
-        <Button className="h-11 w-full rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]">
+        <Button
+          type="submit"
+          className="h-11 w-full rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+        >
           Créer la mission
         </Button>
       </form>

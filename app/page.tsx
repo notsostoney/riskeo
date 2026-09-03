@@ -833,11 +833,7 @@ const missionStatuses: Record<Mission['status'], string> = {
 
 export default function Home() {
   const [role, setRole] = useState<Role>('citoyen');
-  const [activeTab, setActiveTab] = useState<CitizenTab>(() =>
-    typeof window !== 'undefined' && window.location.pathname === '/help'
-      ? 'help'
-      : 'accueil',
-  );
+  const [activeTab, setActiveTab] = useState<CitizenTab>('accueil');
   const [profileInitialSection, setProfileInitialSection] =
     useState<ProfileSection>('info');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
@@ -865,13 +861,19 @@ export default function Home() {
   );
 
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setActiveTab(getTabFromPath(window.location.pathname));
+    }, 0);
+
     function handleHistoryNavigation() {
-      setActiveTab(window.location.pathname === '/help' ? 'help' : 'accueil');
+      setActiveTab(getTabFromPath(window.location.pathname));
     }
 
     window.addEventListener('popstate', handleHistoryNavigation);
-    return () =>
+    return () => {
+      window.clearTimeout(timer);
       window.removeEventListener('popstate', handleHistoryNavigation);
+    };
   }, []);
 
   const selectedReport =
@@ -1001,15 +1003,12 @@ export default function Home() {
     }
     setActiveTab(tab);
 
-    if (tab === 'help') {
-      if (window.location.pathname !== '/help') {
-        window.history.pushState(null, '', '/help');
-      }
-      return;
-    }
+    const nextPath =
+      tab === 'help' ? '/help' : tab === 'credits' ? '/credits' : '/';
 
-    if (window.location.pathname === '/help') {
-      window.history.pushState(null, '', '/');
+    if (window.location.pathname !== nextPath) {
+      window.history.pushState(null, '', nextPath);
+      return;
     }
   }
 
@@ -4424,32 +4423,26 @@ function CreditsView({
 
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-5">
-      <div className="space-y-4 sm:space-y-5">
+      <div className="min-w-0 space-y-4 sm:space-y-5">
         <section className="brand-card overflow-hidden md:hidden">
-          <div className="bg-[#1E3D2F] p-4 text-white">
-            <p className="text-xs font-extrabold uppercase text-[#CFE2D4]">
+          <div className="bg-[#1E3D2F] p-5 text-white">
+            <p className="text-sm font-extrabold uppercase text-[#CFE2D4]">
               Mon solde
             </p>
-            <h1 className="mt-2 text-4xl font-extrabold leading-none">
-              {new Intl.NumberFormat('fr-FR').format(balance)}
+            <h1 className="mt-3 flex items-baseline gap-2 font-extrabold leading-none">
+              <span className="text-[46px]">
+                {new Intl.NumberFormat('fr-FR').format(balance)}
+              </span>
+              <span className="text-[19px]">crédits</span>
             </h1>
-            <p className="mt-1 text-sm font-bold text-[#F7F5F0]">crédits</p>
           </div>
-          <div className="grid grid-cols-2 gap-2 p-3">
+          <div className="p-4 pt-3">
             <Button
-              className="h-11 rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+              className="h-12 w-full rounded-md bg-[#D9643D] text-base font-bold text-white hover:bg-[#C6532E]"
               type="button"
               onClick={() => setView('rewards')}
             >
-              Catalogue
-            </Button>
-            <Button
-              className="h-11 rounded-md"
-              type="button"
-              variant="outline"
-              onClick={() => setView('earn')}
-            >
-              Gagner
+              Voir le catalogue
             </Button>
           </div>
         </section>
@@ -4482,33 +4475,36 @@ function CreditsView({
         {nextReward && nextPartner ? (
           <section className="brand-card overflow-hidden p-4 md:hidden">
             <SectionTitle>Prochain objectif</SectionTitle>
-            <div className="mt-4 flex items-start gap-3">
+            <div className="mt-3 flex items-start gap-3">
               <CategoryBadge category={nextReward.category} />
               <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-extrabold leading-tight">
+                <h2 className="text-[21px] font-extrabold leading-tight">
                   {nextReward.title}
                 </h2>
-                <p className="mt-1 text-sm font-semibold text-[#5B7867]">
+                <p className="mt-1 text-[15px] font-semibold leading-snug text-[#5B7867]">
                   {nextPartner.name}
                 </p>
                 <div className="mt-3">
                   <CreditProgress
+                    compact
                     current={balance}
                     target={nextReward.creditsCost}
                   />
                 </div>
-                <p className="mt-2 text-sm font-extrabold text-[#D9643D]">
+                <p className="mt-2 text-[17px] font-extrabold leading-tight text-[#D9643D]">
                   Plus que {formatCredits(nextReward.creditsCost - balance)}
                 </p>
               </div>
             </div>
             {nextMission ? (
-              <div className="mt-4 rounded-md border border-[#E0D6C4] bg-[#F7F5F0] p-3">
-                <p className="text-xs font-extrabold uppercase text-[#5B7867]">
+              <div className="mt-4 rounded-md border border-[#E0D6C4] bg-[#F7F5F0] p-4">
+                <p className="text-xs font-extrabold uppercase leading-none text-[#5B7867]">
                   Mission disponible
                 </p>
-                <h3 className="mt-1 font-extrabold">{nextMission.title}</h3>
-                <p className="mt-1 text-sm font-semibold text-[#5B7867]">
+                <h3 className="mt-2 text-[19px] font-extrabold leading-tight">
+                  {nextMission.title}
+                </h3>
+                <p className="mt-2 text-[15px] font-semibold leading-snug text-[#5B7867]">
                   {nextMission.date} · +
                   {formatCredits(
                     (nextMission.creditsReward ?? 0) +
@@ -4516,7 +4512,7 @@ function CreditsView({
                   )}
                 </p>
                 <Button
-                  className="mt-3 h-11 w-full rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+                  className="mt-3 h-12 w-full rounded-md bg-[#D9643D] text-base font-bold text-white hover:bg-[#C6532E]"
                   type="button"
                   onClick={() => onTabChange('missions')}
                 >
@@ -4608,7 +4604,7 @@ function CreditsView({
               {creditTabs.map((tab) => (
                 <button
                   key={tab.id}
-                  className={`min-h-11 rounded-md px-2 py-2 text-xs font-bold transition sm:px-3 sm:text-sm ${
+                  className={`h-10 rounded-md px-2 py-2 text-[12px] font-bold transition sm:h-auto sm:min-h-11 sm:px-3 sm:text-sm ${
                     view === tab.id
                       ? 'bg-[#1E3D2F] text-white'
                       : 'bg-[#F7F5F0] text-[#5B7867] hover:bg-[#EEF1EE]'
@@ -4993,9 +4989,11 @@ function CategoryBadge({ category }: { category: RewardCategory }) {
 }
 
 function CreditProgress({
+  compact = false,
   current,
   target,
 }: {
+  compact?: boolean;
   current: number;
   target: number;
 }) {
@@ -5003,15 +5001,23 @@ function CreditProgress({
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between text-sm font-bold text-[#5B7867]">
+      <div
+        className={`mb-2 flex items-center justify-between font-bold text-[#5B7867] ${
+          compact ? 'text-[15px]' : 'text-sm'
+        }`}
+      >
         <span>
-          {formatCredits(current)} / {formatCredits(target)}
+          {compact
+            ? `${new Intl.NumberFormat('fr-FR').format(current)} / ${formatCredits(target)}`
+            : `${formatCredits(current)} / ${formatCredits(target)}`}
         </span>
         <span>{progress}%</span>
       </div>
-      <div className="h-3 rounded-full bg-[#EEF1EE]">
+      <div className={`rounded-full bg-[#EEF1EE] ${compact ? 'h-2.5' : 'h-3'}`}>
         <span
-          className="block h-3 rounded-full bg-[#D9643D]"
+          className={`block rounded-full bg-[#D9643D] ${
+            compact ? 'h-2.5' : 'h-3'
+          }`}
           style={{ width: `${progress}%` }}
         />
       </div>
@@ -5993,6 +5999,18 @@ function getInitialHelpRequests(): HelpRequest[] {
   } catch {
     return defaultHelpRequests;
   }
+}
+
+function getTabFromPath(pathname: string): CitizenTab {
+  if (pathname === '/help') {
+    return 'help';
+  }
+
+  if (pathname === '/credits') {
+    return 'credits';
+  }
+
+  return 'accueil';
 }
 
 function normalizeHelpText(value: string) {

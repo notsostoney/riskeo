@@ -13,20 +13,16 @@ import {
   ClipboardList,
   Coins,
   Eye,
-  Handshake,
   Hammer,
   HelpCircle,
   Home as HomeIcon,
   Layers3,
-  Leaf,
   LocateFixed,
   LogOut,
   MapIcon,
   MapPin,
-  Mountain,
   Plus,
   Shield,
-  Target,
   TreePine,
   Trophy,
   Upload,
@@ -150,14 +146,6 @@ const onboardingSteps = [
     text: 'Vos missions validées vous font progresser et débloquent des récompenses locales.',
     icon: Coins,
   },
-];
-
-const values = [
-  { label: 'Nature', icon: Leaf },
-  { label: 'Solidarite', icon: Handshake },
-  { label: 'Territoire', icon: Mountain },
-  { label: 'Prevention', icon: Target },
-  { label: 'Fiabilite', icon: Shield },
 ];
 
 const statusStyles: Record<RiskReport['status'], string> = {
@@ -698,9 +686,7 @@ function CitizenHome({
       </section>
 
       <aside className="space-y-5">
-        <FondettesContext />
         <MissionList compact missions={missions.slice(0, 2)} />
-        <BrandTags />
       </aside>
     </div>
   );
@@ -1212,34 +1198,6 @@ function FondettesMap({
   );
 }
 
-function FondettesContext() {
-  return (
-    <section className="brand-card p-4">
-      <SectionTitle>Contexte local</SectionTitle>
-      <div className="mt-4 space-y-3 text-sm leading-6">
-        <p>
-          Prototype centré sur Fondettes, commune d’Indre-et-Loire avec services
-          techniques et police municipale.
-        </p>
-        <p className="rounded-md bg-[#F7F5F0] p-3 font-semibold">
-          Hôtel de Ville de Fondettes
-          <br />
-          35 rue Eugène Goüin
-          <br />
-          37230 Fondettes
-        </p>
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        {values.map((value) => (
-          <SmallMeta key={value.label} icon={value.icon}>
-            {value.label}
-          </SmallMeta>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function MissionCreateForm({
   newMissionAssignee,
   newMissionDate,
@@ -1601,26 +1559,6 @@ function MiniCalendar() {
           </span>
         ))}
       </div>
-    </div>
-  );
-}
-
-function BrandTags() {
-  const tags = [
-    { label: 'Proximité', icon: Users },
-    { label: 'Engagement', icon: Target },
-    { label: 'Prévention', icon: Shield },
-    { label: 'Terrain', icon: MapPin },
-    { label: 'Transmission', icon: TreePine },
-  ];
-
-  return (
-    <div className="brand-card flex flex-wrap gap-2 p-3">
-      {tags.map((tag) => (
-        <SmallMeta key={tag.label} icon={tag.icon}>
-          {tag.label}
-        </SmallMeta>
-      ))}
     </div>
   );
 }

@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   title: 'Riskeo',
   description:
     'Plateforme locale pour signaler, prioriser et traiter les risques de territoire.',
+  icons: {
+    icon: '/brand/app-icon.png',
+    apple: '/brand/app-icon.png',
+  },
 };
 
 export default function RootLayout({

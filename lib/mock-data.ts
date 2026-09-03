@@ -12,6 +12,7 @@ export const initialRiskReports: RiskReport[] = [
     reporter: 'Lucas Martin',
     date: "Aujourd'hui",
     coordinates: { x: 62, y: 31 },
+    geo: { lat: 47.4116, lng: 0.5812 },
     description:
       'Herbes hautes et branches mortes en limite de parcelle, proche de deux habitations.',
     photoLabel: 'vegetation-seche.jpg',
@@ -28,6 +29,7 @@ export const initialRiskReports: RiskReport[] = [
     reporter: 'Mairie',
     date: 'Hier',
     coordinates: { x: 42, y: 63 },
+    geo: { lat: 47.3975, lng: 0.6082 },
     description:
       'Passage retreci par des gravats et palettes. Vehicule de secours difficile a manoeuvrer.',
     photoLabel: 'acces-vallon.jpg',
@@ -44,6 +46,7 @@ export const initialRiskReports: RiskReport[] = [
     reporter: 'Sarah B.',
     date: 'Lundi',
     coordinates: { x: 71, y: 72 },
+    geo: { lat: 47.4069, lng: 0.622 },
     description:
       'Grosse branche fendue au-dessus du bas-cote, risque de chute en cas de vent.',
     photoLabel: 'branche-route.jpg',

@@ -19,6 +19,11 @@ export type Coordinates = {
   y: number;
 };
 
+export type GeoPoint = {
+  lat: number;
+  lng: number;
+};
+
 export type RiskReport = {
   id: string;
   title: string;
@@ -30,6 +35,7 @@ export type RiskReport = {
   reporter: string;
   date: string;
   coordinates: Coordinates;
+  geo: GeoPoint;
   description: string;
   photoLabel: string;
   priorityScore: number;

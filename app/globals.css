@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
+@import 'leaflet/dist/leaflet.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -234,6 +235,56 @@ body {
     padding: 1rem;
     text-align: center;
     font-size: 0.875rem;
+  }
+
+  .terrain-thumb {
+    min-height: 112px;
+    background:
+      linear-gradient(150deg, rgb(30 61 47 / 12%) 0 48%, transparent 49%),
+      radial-gradient(circle at 74% 32%, #ebd7b5 0 15%, transparent 16%),
+      linear-gradient(135deg, #a8c5b1, #eef1ee);
+  }
+
+  .riskeo-marker {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 3px solid white;
+    border-radius: 999px;
+    background: #5ba681;
+    box-shadow: 0 10px 24px rgb(30 61 47 / 24%);
+    color: #102018;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .riskeo-marker.is-selected {
+    background: #d9643d;
+    color: white;
+  }
+
+  .leaflet-container {
+    font-family: var(--font-montserrat), Arial, Helvetica, sans-serif;
+  }
+
+  .leaflet-control-zoom a {
+    border-color: #d9ddd8;
+    color: #1e3d2f;
+  }
+
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    border: 1px solid #d9ddd8;
+    background: #fffdf8;
+    color: #173328;
+  }
+
+  .leaflet-popup-content {
+    margin: 12px 14px;
+    font-family: var(--font-montserrat), Arial, Helvetica, sans-serif;
+    font-size: 13px;
+    line-height: 1.55;
   }
 
   .map-terrain {

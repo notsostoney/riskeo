@@ -13,6 +13,7 @@ import {
   Circle,
   ClipboardList,
   Coins,
+  Edit3,
   Film,
   Eye,
   Hammer,
@@ -28,10 +29,12 @@ import {
   QrCode,
   ReceiptText,
   Scissors,
+  Settings2,
   Shield,
   Sparkles,
   Store,
   Ticket,
+  Trash2,
   TreePine,
   Trophy,
   Utensils,
@@ -91,12 +94,68 @@ type CitizenTab =
   | 'credits'
   | 'profil';
 type AuthMode = 'login' | 'signup';
+type ProfileSection =
+  | 'info'
+  | 'preferences'
+  | 'availability'
+  | 'notifications'
+  | 'security';
 
 type DemoSession = {
   firstName: string;
   lastName: string;
   email: string;
   town: string;
+};
+
+type ProfileData = DemoSession & {
+  phone: string;
+  postalCode: string;
+  address: string;
+  memberSince: string;
+  avatarUrl?: string;
+  missionInterests: {
+    vegetationCare: boolean;
+    stormCleanup: boolean;
+    terrainCheck: boolean;
+    collectiveOperations: boolean;
+  };
+  maxDistance: string;
+  missionDifficulty: {
+    simple: boolean;
+    supervised: boolean;
+  };
+  availability: Record<
+    string,
+    Record<'morning' | 'afternoon' | 'evening', boolean>
+  >;
+  weekendPreferred: boolean;
+  pauseMissions: {
+    active: boolean;
+    startDate: string;
+    endDate: string;
+  };
+  notifications: {
+    reportStatus: boolean;
+    reportValidated: boolean;
+    missionFromReport: boolean;
+    missionValidated: boolean;
+    creditsReceived: boolean;
+    nearbyMission: boolean;
+    missionReminder: boolean;
+    missionChange: boolean;
+    cityInfo: boolean;
+    localAlerts: boolean;
+  };
+  channels: {
+    inApp: boolean;
+    email: boolean;
+    sms: boolean;
+  };
+  privacy: {
+    cityIdentityVisible: boolean;
+    locationAllowed: boolean;
+  };
 };
 
 type WebMcpDocument = Document & {
@@ -120,6 +179,7 @@ type WebMcpDocument = Document & {
 
 const sessionKey = 'riskeo-demo-session-v2';
 const onboardingKey = 'riskeo-onboarding-seen-v2';
+const profileKey = 'riskeo-citizen-profile-v1';
 
 const defaultSession: DemoSession = {
   firstName: 'Lucas',
@@ -127,6 +187,93 @@ const defaultSession: DemoSession = {
   email: 'lucas.martin@demo.local',
   town: 'Fondettes',
 };
+
+const defaultAvailability = {
+  Lundi: { morning: false, afternoon: false, evening: false },
+  Mardi: { morning: false, afternoon: false, evening: false },
+  Mercredi: { morning: false, afternoon: false, evening: false },
+  Jeudi: { morning: false, afternoon: false, evening: false },
+  Vendredi: { morning: false, afternoon: false, evening: false },
+  Samedi: { morning: true, afternoon: true, evening: false },
+  Dimanche: { morning: true, afternoon: false, evening: false },
+};
+
+const defaultProfileData: ProfileData = {
+  ...defaultSession,
+  phone: '06 12 34 56 78',
+  postalCode: '37230',
+  address: '12 rue des Chaussumiers',
+  memberSince: 'septembre 2026',
+  missionInterests: {
+    vegetationCare: true,
+    stormCleanup: true,
+    terrainCheck: true,
+    collectiveOperations: true,
+  },
+  maxDistance: '5 km',
+  missionDifficulty: {
+    simple: true,
+    supervised: true,
+  },
+  availability: defaultAvailability,
+  weekendPreferred: true,
+  pauseMissions: {
+    active: false,
+    startDate: '',
+    endDate: '',
+  },
+  notifications: {
+    reportStatus: true,
+    reportValidated: true,
+    missionFromReport: true,
+    missionValidated: true,
+    creditsReceived: true,
+    nearbyMission: true,
+    missionReminder: true,
+    missionChange: true,
+    cityInfo: true,
+    localAlerts: true,
+  },
+  channels: {
+    inApp: true,
+    email: true,
+    sms: false,
+  },
+  privacy: {
+    cityIdentityVisible: true,
+    locationAllowed: true,
+  },
+};
+
+const profileSections: {
+  id: ProfileSection;
+  label: string;
+  icon: LucideIcon;
+}[] = [
+  { id: 'info', label: 'Informations personnelles', icon: User },
+  { id: 'preferences', label: 'Mes préférences', icon: Settings2 },
+  { id: 'availability', label: 'Disponibilités', icon: CalendarDays },
+  { id: 'notifications', label: 'Notifications', icon: Bell },
+  { id: 'security', label: 'Sécurité & confidentialité', icon: Shield },
+];
+
+const recentProfileActivity = [
+  {
+    title: '+300 crédits',
+    detail: 'Mission Entretien végétation validée',
+    date: '12 septembre',
+  },
+  {
+    title: 'Mission terminée',
+    detail: 'Nettoyage après intempéries',
+    date: '8 septembre',
+  },
+  {
+    title: 'Signalement validé',
+    detail: 'Végétation sèche',
+    date: '4 septembre',
+  },
+];
 
 const categoryOptions: RiskCategory[] = [
   'Vegetation',
@@ -394,6 +541,11 @@ export default function Home() {
     setShowAuth(true);
   }
 
+  function updateSession(data: DemoSession) {
+    window.localStorage.setItem(sessionKey, JSON.stringify(data));
+    setSession(data);
+  }
+
   function handleReportSubmit(payload: ReportFormPayload) {
     const newReport = createRiskReport(payload);
 
@@ -519,6 +671,8 @@ export default function Home() {
           onSubmit={handleReportSubmit}
           onTabChange={setActiveTab}
           onValidateMission={validateMissionCredits}
+          onLogout={logout}
+          onSessionUpdate={updateSession}
         />
       ) : (
         <CityExperience
@@ -751,6 +905,8 @@ function CitizenExperience({
   onSubmit,
   onTabChange,
   onValidateMission,
+  onLogout,
+  onSessionUpdate,
 }: {
   activeTab: CitizenTab;
   credits: number;
@@ -768,6 +924,8 @@ function CitizenExperience({
   onSubmit: (payload: ReportFormPayload) => RiskReport;
   onTabChange: (tab: CitizenTab) => void;
   onValidateMission: (mission: Mission) => void;
+  onLogout: () => void;
+  onSessionUpdate: (session: DemoSession) => void;
 }) {
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-5 sm:px-6 lg:py-7">
@@ -828,6 +986,9 @@ function CitizenExperience({
           session={session}
           reports={reports}
           missions={missions}
+          onLogout={onLogout}
+          onSessionUpdate={onSessionUpdate}
+          onTabChange={onTabChange}
         />
       ) : null}
     </div>
@@ -1835,31 +1996,1176 @@ function ProfileView({
   session,
   reports,
   missions,
+  onLogout,
+  onSessionUpdate,
+  onTabChange,
 }: {
   credits: number;
   session: DemoSession;
   reports: RiskReport[];
   missions: Mission[];
+  onLogout: () => void;
+  onSessionUpdate: (session: DemoSession) => void;
+  onTabChange: (tab: CitizenTab) => void;
 }) {
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+  const [profile, setProfile] = useState<ProfileData>(() =>
+    getInitialProfile(session),
+  );
+  const [draftProfile, setDraftProfile] = useState<ProfileData>(() =>
+    getInitialProfile(session),
+  );
+  const [activeSection, setActiveSection] = useState<ProfileSection>('info');
+  const [editingInfo, setEditingInfo] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+
+  useEffect(() => {
+    if (!toastMessage) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setToastMessage(''), 2200);
+    return () => window.clearTimeout(timer);
+  }, [toastMessage]);
+
+  function saveProfile(nextProfile: ProfileData, syncSession = false) {
+    setProfile(nextProfile);
+    setDraftProfile(nextProfile);
+    window.localStorage.setItem(profileKey, JSON.stringify(nextProfile));
+    setToastMessage('Modifications enregistrées ✓');
+
+    if (syncSession) {
+      onSessionUpdate({
+        firstName: nextProfile.firstName,
+        lastName: nextProfile.lastName,
+        email: nextProfile.email,
+        town: nextProfile.town,
+      });
+    }
+  }
+
+  function saveInfo() {
+    saveProfile(draftProfile, true);
+    setEditingInfo(false);
+  }
+
+  function cancelInfoEdit() {
+    setDraftProfile(profile);
+    setEditingInfo(false);
+  }
+
+  function handleAvatar(file?: File) {
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const avatarUrl =
+        typeof reader.result === 'string' ? reader.result : undefined;
+
+      if (avatarUrl) {
+        saveProfile({ ...profile, avatarUrl });
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
   return (
-    <section className="mx-auto max-w-3xl brand-card p-6">
-      <div className="flex items-center gap-4">
-        <span className="grid size-16 place-items-center rounded-full bg-[#1E3D2F] text-2xl font-extrabold text-white">
-          {session.firstName[0]}
-        </span>
-        <div>
-          <h1 className="text-2xl font-extrabold">
-            {session.firstName} {session.lastName}
-          </h1>
-          <p className="font-semibold text-[#5B7867]">{session.town}</p>
+    <section className="mx-auto max-w-5xl space-y-5">
+      <section className="brand-card p-5 sm:p-6">
+        <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <div>
+              <button
+                aria-label="Changer ma photo"
+                className="grid size-20 place-items-center overflow-hidden rounded-full bg-[#1E3D2F] text-3xl font-extrabold text-white transition hover:scale-[1.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5BA681]"
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                {profile.avatarUrl ? (
+                  <Image
+                    alt="Avatar de Lucas"
+                    className="h-full w-full object-cover"
+                    height={96}
+                    src={profile.avatarUrl}
+                    unoptimized
+                    width={96}
+                  />
+                ) : (
+                  profile.firstName[0]
+                )}
+              </button>
+              <input
+                ref={avatarInputRef}
+                className="sr-only"
+                type="file"
+                accept="image/*"
+                onChange={(event) => handleAvatar(event.target.files?.[0])}
+              />
+            </div>
+            <div>
+              <h1 className="text-2xl font-extrabold">
+                {profile.firstName} {profile.lastName}
+              </h1>
+              <p className="mt-1 flex items-center gap-1 font-semibold text-[#5B7867]">
+                <MapPin size={16} />
+                {profile.town}
+              </p>
+              <p className="mt-1 text-sm text-[#5B7867]">
+                Membre depuis {profile.memberSince}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                  onClick={() => avatarInputRef.current?.click()}
+                >
+                  Changer ma photo
+                </Button>
+                {profile.avatarUrl ? (
+                  <>
+                    <Button
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                      onClick={() => avatarInputRef.current?.click()}
+                    >
+                      Modifier
+                    </Button>
+                    <Button
+                      size="sm"
+                      type="button"
+                      variant="ghost"
+                      onClick={() =>
+                        saveProfile({ ...profile, avatarUrl: undefined })
+                      }
+                    >
+                      Supprimer
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          <Button
+            className="h-11 rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+            type="button"
+            onClick={() => {
+              setActiveSection('info');
+              setEditingInfo(true);
+            }}
+          >
+            <Edit3 size={16} />
+            Modifier mon profil
+          </Button>
+        </div>
+
+        <div className="mt-6 grid gap-3 sm:grid-cols-3">
+          <ProfileMetricButton
+            label="Signalements"
+            value={reports.length}
+            onClick={() => onTabChange('carte')}
+          />
+          <ProfileMetricButton
+            label="Missions"
+            value={missions.length}
+            onClick={() => onTabChange('missions')}
+          />
+          <ProfileMetricButton
+            label="Mes crédits"
+            value={credits}
+            tone="orange"
+            onClick={() => onTabChange('credits')}
+          />
+        </div>
+      </section>
+
+      <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside className="brand-card hidden h-fit p-4 lg:block">
+          <SectionTitle>Mon compte</SectionTitle>
+          <nav className="mt-4 space-y-2">
+            {profileSections.map((section) => (
+              <ProfileNavButton
+                key={section.id}
+                active={activeSection === section.id}
+                icon={section.icon}
+                label={section.label}
+                onClick={() => setActiveSection(section.id)}
+              />
+            ))}
+          </nav>
+        </aside>
+
+        <div className="space-y-5">
+          <div className="grid gap-5 lg:hidden">
+            <RecentActivityCard
+              onOpenActivity={() => setActiveSection('info')}
+            />
+            <UpcomingProfileAction
+              mission={missions[0]}
+              onOpenMission={() => onTabChange('missions')}
+            />
+          </div>
+
+          <section className="brand-card p-5 sm:p-6">
+            <div className="mb-5 lg:hidden">
+              <Label>Mon compte</Label>
+              <NativeSelect
+                className="mt-2 w-full"
+                value={activeSection}
+                onChange={(event) =>
+                  setActiveSection(event.target.value as ProfileSection)
+                }
+              >
+                {profileSections.map((section) => (
+                  <NativeSelectOption key={section.id} value={section.id}>
+                    {section.label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
+
+            {activeSection === 'info' ? (
+              <PersonalInfoSection
+                draftProfile={draftProfile}
+                editing={editingInfo}
+                profile={profile}
+                onCancel={cancelInfoEdit}
+                onDraftChange={setDraftProfile}
+                onEdit={() => setEditingInfo(true)}
+                onSave={saveInfo}
+              />
+            ) : null}
+
+            {activeSection === 'preferences' ? (
+              <PreferencesSection profile={profile} onSave={saveProfile} />
+            ) : null}
+
+            {activeSection === 'availability' ? (
+              <AvailabilitySection profile={profile} onSave={saveProfile} />
+            ) : null}
+
+            {activeSection === 'notifications' ? (
+              <NotificationsSection profile={profile} onSave={saveProfile} />
+            ) : null}
+
+            {activeSection === 'security' ? (
+              <SecuritySection
+                profile={profile}
+                onLogout={onLogout}
+                onPasswordChange={() => setShowPasswordModal(true)}
+                onSave={saveProfile}
+                onDeleteAccount={() => setShowDeleteModal(true)}
+              />
+            ) : null}
+          </section>
         </div>
       </div>
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        <Metric label="Signalements" value={reports.length} />
-        <Metric label="Missions" value={missions.length} />
-        <Metric label="Mes crédits" value={credits} tone="orange" />
+
+      <div className="hidden grid-cols-2 gap-5 lg:grid">
+        <UpcomingProfileAction
+          mission={missions[0]}
+          onOpenMission={() => onTabChange('missions')}
+        />
+        <RecentActivityCard onOpenActivity={() => setActiveSection('info')} />
       </div>
+
+      {toastMessage ? (
+        <div className="fixed bottom-24 left-1/2 z-50 -translate-x-1/2 rounded-md bg-[#1E3D2F] px-4 py-3 text-sm font-bold text-white shadow-xl md:bottom-6">
+          {toastMessage}
+        </div>
+      ) : null}
+
+      {showPasswordModal ? (
+        <PasswordModal
+          onClose={() => setShowPasswordModal(false)}
+          onSave={() => {
+            setShowPasswordModal(false);
+            setToastMessage('Modifications enregistrées ✓');
+          }}
+        />
+      ) : null}
+
+      {showDeleteModal ? (
+        <DeleteAccountModal
+          onCancel={() => setShowDeleteModal(false)}
+          onConfirm={() => {
+            setShowDeleteModal(false);
+            onLogout();
+          }}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function ProfileMetricButton({
+  label,
+  value,
+  tone = 'white',
+  onClick,
+}: {
+  label: string;
+  value: number;
+  tone?: 'white' | 'orange';
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`rounded-md border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5BA681] ${
+        tone === 'orange'
+          ? 'border-[#D9643D] bg-[#D9643D] text-white'
+          : 'border-[#D9DDD8] bg-white text-[#1E3D2F]'
+      }`}
+      type="button"
+      onClick={onClick}
+    >
+      <span className="block text-3xl font-extrabold leading-none">
+        {value}
+      </span>
+      <span className="mt-2 block text-sm font-bold">{label}</span>
+      {tone === 'orange' ? (
+        <span className="mt-2 block text-sm font-semibold">
+          Voir mes récompenses →
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function ProfileNavButton({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`flex w-full items-center gap-3 rounded-md px-3 py-3 text-left text-sm font-bold transition ${
+        active
+          ? 'bg-[#EEF1EE] text-[#1E3D2F]'
+          : 'text-[#5B7867] hover:bg-[#F7F5F0] hover:text-[#1E3D2F]'
+      }`}
+      type="button"
+      onClick={onClick}
+    >
+      <Icon size={17} strokeWidth={1.8} />
+      {label}
+    </button>
+  );
+}
+
+function PersonalInfoSection({
+  draftProfile,
+  editing,
+  profile,
+  onCancel,
+  onDraftChange,
+  onEdit,
+  onSave,
+}: {
+  draftProfile: ProfileData;
+  editing: boolean;
+  profile: ProfileData;
+  onCancel: () => void;
+  onDraftChange: (profile: ProfileData) => void;
+  onEdit: () => void;
+  onSave: () => void;
+}) {
+  const rows: {
+    key: keyof Pick<
+      ProfileData,
+      | 'firstName'
+      | 'lastName'
+      | 'email'
+      | 'phone'
+      | 'town'
+      | 'postalCode'
+      | 'address'
+    >;
+    label: string;
+    type?: string;
+  }[] = [
+    { key: 'firstName', label: 'Prénom' },
+    { key: 'lastName', label: 'Nom' },
+    { key: 'email', label: 'Email', type: 'email' },
+    { key: 'phone', label: 'Téléphone', type: 'tel' },
+    { key: 'town', label: 'Commune' },
+    { key: 'postalCode', label: 'Code postal' },
+    { key: 'address', label: 'Adresse' },
+  ];
+
+  return (
+    <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-extrabold">Informations personnelles</h2>
+          <p className="mt-1 text-sm text-[#5B7867]">
+            Ces informations restent modifiables dans ce prototype.
+          </p>
+        </div>
+        {editing ? (
+          <div className="flex gap-2">
+            <Button variant="outline" type="button" onClick={onCancel}>
+              Annuler
+            </Button>
+            <Button
+              className="rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+              type="button"
+              onClick={onSave}
+            >
+              Enregistrer
+            </Button>
+          </div>
+        ) : (
+          <Button variant="outline" type="button" onClick={onEdit}>
+            Modifier
+          </Button>
+        )}
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        {rows.map((row) => (
+          <div
+            key={row.key}
+            className="grid gap-2 rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-3 sm:grid-cols-[150px_1fr]"
+          >
+            <Label>{row.label}</Label>
+            {editing ? (
+              <Input
+                type={row.type ?? 'text'}
+                value={draftProfile[row.key] as string}
+                onChange={(event) =>
+                  onDraftChange({
+                    ...draftProfile,
+                    [row.key]: event.target.value,
+                  })
+                }
+              />
+            ) : (
+              <p className="font-semibold text-[#1E3D2F]">
+                {profile[row.key] as string}
+              </p>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PreferencesSection({
+  profile,
+  onSave,
+}: {
+  profile: ProfileData;
+  onSave: (profile: ProfileData) => void;
+}) {
+  const interests: {
+    key: keyof ProfileData['missionInterests'];
+    label: string;
+  }[] = [
+    { key: 'vegetationCare', label: 'Entretien de végétation' },
+    { key: 'stormCleanup', label: 'Nettoyage après intempéries' },
+    { key: 'terrainCheck', label: 'Vérification terrain' },
+    { key: 'collectiveOperations', label: 'Opérations collectives' },
+  ];
+  const distances = ['1 km', '3 km', '5 km', '10 km', 'Toute la commune'];
+
+  return (
+    <div>
+      <h2 className="text-xl font-extrabold">Mes préférences Riskéo</h2>
+      <p className="mt-1 text-sm leading-6 text-[#5B7867]">
+        Personnalisez les missions et informations que vous souhaitez recevoir.
+      </p>
+
+      <div className="mt-5 space-y-5">
+        <section>
+          <h3 className="font-extrabold">Je souhaite participer à</h3>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {interests.map((item) => (
+              <CheckRow
+                key={item.key}
+                checked={profile.missionInterests[item.key]}
+                label={item.label}
+                onChange={(checked) =>
+                  onSave({
+                    ...profile,
+                    missionInterests: {
+                      ...profile.missionInterests,
+                      [item.key]: checked,
+                    },
+                  })
+                }
+              />
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h3 className="font-extrabold">Distance maximale</h3>
+          <p className="mt-1 text-sm text-[#5B7867]">
+            Affichez en priorité les missions proches de chez vous.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {distances.map((distance) => (
+              <button
+                key={distance}
+                className={`min-h-10 rounded-md border px-3 py-2 text-sm font-bold ${
+                  profile.maxDistance === distance
+                    ? 'border-[#1E3D2F] bg-[#EEF1EE] text-[#1E3D2F]'
+                    : 'border-[#D9DDD8] bg-white text-[#5B7867]'
+                }`}
+                type="button"
+                onClick={() => onSave({ ...profile, maxDistance: distance })}
+              >
+                {distance}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h3 className="font-extrabold">Missions que je souhaite voir</h3>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <CheckRow
+              checked={profile.missionDifficulty.simple}
+              label="Mission citoyenne simple"
+              onChange={(checked) =>
+                onSave({
+                  ...profile,
+                  missionDifficulty: {
+                    ...profile.missionDifficulty,
+                    simple: checked,
+                  },
+                })
+              }
+            />
+            <CheckRow
+              checked={profile.missionDifficulty.supervised}
+              label="Mission citoyenne encadrée"
+              onChange={(checked) =>
+                onSave({
+                  ...profile,
+                  missionDifficulty: {
+                    ...profile.missionDifficulty,
+                    supervised: checked,
+                  },
+                })
+              }
+            />
+          </div>
+          <p className="mt-3 rounded-md bg-[#F7F5F0] p-3 text-sm leading-6 text-[#5B7867]">
+            Les interventions nécessitant du matériel ou des compétences
+            professionnelles ne sont jamais proposées aux citoyens.
+          </p>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function AvailabilitySection({
+  profile,
+  onSave,
+}: {
+  profile: ProfileData;
+  onSave: (profile: ProfileData) => void;
+}) {
+  const slots = [
+    { key: 'morning' as const, label: 'Matin' },
+    { key: 'afternoon' as const, label: 'Après-midi' },
+    { key: 'evening' as const, label: 'Soir' },
+  ];
+  const pauseEndLabel = profile.pauseMissions.endDate
+    ? new Date(profile.pauseMissions.endDate).toLocaleDateString('fr-FR', {
+        day: 'numeric',
+        month: 'long',
+      })
+    : '18 septembre';
+
+  return (
+    <div>
+      <h2 className="text-xl font-extrabold">Mes disponibilités</h2>
+      <p className="mt-1 text-sm leading-6 text-[#5B7867]">
+        Indiquez quand vous êtes généralement disponible afin que Riskéo vous
+        recommande les missions les plus adaptées.
+      </p>
+
+      <div className="mt-5 overflow-x-auto">
+        <div className="min-w-[560px] rounded-md border border-[#D9DDD8] bg-[#FFFDF8]">
+          {Object.entries(profile.availability).map(([day, values]) => (
+            <div
+              key={day}
+              className="grid grid-cols-[120px_repeat(3,1fr)] gap-2 border-b border-[#E0D6C4] p-3 last:border-b-0"
+            >
+              <p className="font-extrabold">{day}</p>
+              {slots.map((slot) => (
+                <button
+                  key={`${day}-${slot.key}`}
+                  className={`min-h-10 rounded-md border px-3 py-2 text-sm font-bold transition ${
+                    values[slot.key]
+                      ? 'border-[#1E3D2F] bg-[#EEF1EE] text-[#1E3D2F]'
+                      : 'border-[#D9DDD8] bg-white text-[#5B7867] hover:border-[#5BA681]'
+                  }`}
+                  type="button"
+                  onClick={() =>
+                    onSave({
+                      ...profile,
+                      availability: {
+                        ...profile.availability,
+                        [day]: {
+                          ...values,
+                          [slot.key]: !values[slot.key],
+                        },
+                      },
+                    })
+                  }
+                >
+                  {slot.label}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="mt-5">
+        <CheckRow
+          checked={profile.weekendPreferred}
+          label="Je préfère les missions le week-end"
+          onChange={(checked) =>
+            onSave({ ...profile, weekendPreferred: checked })
+          }
+        />
+      </div>
+
+      <section className="mt-5 rounded-md border border-[#D9DDD8] bg-[#F7F5F0] p-4">
+        <h3 className="font-extrabold">Indisponibilité temporaire</h3>
+        <p className="mt-1 text-sm leading-6 text-[#5B7867]">
+          Vous partez en vacances ? Suspendez les recommandations de missions
+          temporairement.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <Field label="Date de début">
+            <Input
+              type="date"
+              value={profile.pauseMissions.startDate}
+              onChange={(event) =>
+                onSave({
+                  ...profile,
+                  pauseMissions: {
+                    ...profile.pauseMissions,
+                    startDate: event.target.value,
+                  },
+                })
+              }
+            />
+          </Field>
+          <Field label="Date de fin">
+            <Input
+              type="date"
+              value={profile.pauseMissions.endDate}
+              onChange={(event) =>
+                onSave({
+                  ...profile,
+                  pauseMissions: {
+                    ...profile.pauseMissions,
+                    endDate: event.target.value,
+                  },
+                })
+              }
+            />
+          </Field>
+        </div>
+        {profile.pauseMissions.active ? (
+          <p className="mt-3 text-sm font-bold text-[#1E3D2F]">
+            Missions en pause jusqu’au {pauseEndLabel}.
+          </p>
+        ) : null}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            className="rounded-md bg-[#1E3D2F] text-white hover:bg-[#173326]"
+            type="button"
+            onClick={() =>
+              onSave({
+                ...profile,
+                pauseMissions: {
+                  active: true,
+                  startDate:
+                    profile.pauseMissions.startDate ||
+                    new Date().toISOString().slice(0, 10),
+                  endDate: profile.pauseMissions.endDate || '2026-09-18',
+                },
+              })
+            }
+          >
+            Mettre les missions en pause
+          </Button>
+          {profile.pauseMissions.active ? (
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() =>
+                onSave({
+                  ...profile,
+                  pauseMissions: {
+                    ...profile.pauseMissions,
+                    active: false,
+                  },
+                })
+              }
+            >
+              Réactiver maintenant
+            </Button>
+          ) : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function NotificationsSection({
+  profile,
+  onSave,
+}: {
+  profile: ProfileData;
+  onSave: (profile: ProfileData) => void;
+}) {
+  const notificationGroups = [
+    {
+      title: 'Activité Riskéo',
+      items: [
+        ['reportStatus', 'Nouveau statut sur mon signalement'],
+        ['reportValidated', 'Signalement validé'],
+        ['missionFromReport', 'Mission créée depuis mon signalement'],
+        ['missionValidated', 'Mission validée'],
+        ['creditsReceived', 'Crédits reçus'],
+      ],
+    },
+    {
+      title: 'Missions',
+      items: [
+        ['nearbyMission', 'Nouvelle mission près de chez moi'],
+        ['missionReminder', 'Rappel avant une mission'],
+        ['missionChange', 'Changement concernant une mission'],
+      ],
+    },
+    {
+      title: 'Territoire',
+      items: [
+        ['cityInfo', 'Informations importantes de la mairie'],
+        ['localAlerts', 'Alertes Riskéo à Fondettes'],
+      ],
+    },
+  ] as const;
+
+  return (
+    <div>
+      <h2 className="text-xl font-extrabold">Notifications</h2>
+      <div className="mt-5 grid gap-5">
+        {notificationGroups.map((group) => (
+          <section key={group.title}>
+            <h3 className="font-extrabold">{group.title}</h3>
+            <div className="mt-3 grid gap-2">
+              {group.items.map(([key, label]) => (
+                <CheckRow
+                  key={key}
+                  checked={profile.notifications[key]}
+                  label={label}
+                  onChange={(checked) =>
+                    onSave({
+                      ...profile,
+                      notifications: {
+                        ...profile.notifications,
+                        [key]: checked,
+                      },
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+
+        <section>
+          <h3 className="font-extrabold">
+            Comment souhaitez-vous être informé ?
+          </h3>
+          <p className="mt-1 text-sm leading-6 text-[#5B7867]">
+            Les préférences sont conservées ici, sans envoi réel d’email ou de
+            SMS dans ce prototype.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            <CheckRow
+              checked={profile.channels.inApp}
+              label="Notifications dans Riskéo"
+              onChange={(checked) =>
+                onSave({
+                  ...profile,
+                  channels: { ...profile.channels, inApp: checked },
+                })
+              }
+            />
+            <CheckRow
+              checked={profile.channels.email}
+              label="Email"
+              onChange={(checked) =>
+                onSave({
+                  ...profile,
+                  channels: { ...profile.channels, email: checked },
+                })
+              }
+            />
+            <CheckRow
+              checked={profile.channels.sms}
+              label="SMS"
+              onChange={(checked) =>
+                onSave({
+                  ...profile,
+                  channels: { ...profile.channels, sms: checked },
+                })
+              }
+            />
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function SecuritySection({
+  profile,
+  onLogout,
+  onPasswordChange,
+  onSave,
+  onDeleteAccount,
+}: {
+  profile: ProfileData;
+  onLogout: () => void;
+  onPasswordChange: () => void;
+  onSave: (profile: ProfileData) => void;
+  onDeleteAccount: () => void;
+}) {
+  return (
+    <div>
+      <h2 className="text-xl font-extrabold">Sécurité & confidentialité</h2>
+
+      <section className="mt-5 rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-extrabold">Mot de passe</h3>
+            <p className="mt-1 font-semibold text-[#5B7867]">••••••••••••</p>
+          </div>
+          <Button variant="outline" type="button" onClick={onPasswordChange}>
+            Modifier mon mot de passe
+          </Button>
+        </div>
+      </section>
+
+      <section className="mt-5 rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-4">
+        <h3 className="font-extrabold">Visibilité de mes contributions</h3>
+        <ToggleRow
+          checked={profile.privacy.cityIdentityVisible}
+          label="La mairie peut voir mon identité lorsque je réalise un signalement ou une mission."
+          onChange={(checked) =>
+            onSave({
+              ...profile,
+              privacy: { ...profile.privacy, cityIdentityVisible: checked },
+            })
+          }
+        />
+        <p className="mt-3 text-sm leading-6 text-[#5B7867]">
+          Votre identité n’est pas affichée publiquement sur la carte Riskéo.
+        </p>
+      </section>
+
+      <section className="mt-5 rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-4">
+        <h3 className="font-extrabold">Localisation</h3>
+        <ToggleRow
+          checked={profile.privacy.locationAllowed}
+          label="Autoriser Riskéo à utiliser ma position lorsque je demande à être localisé."
+          onChange={(checked) =>
+            onSave({
+              ...profile,
+              privacy: { ...profile.privacy, locationAllowed: checked },
+            })
+          }
+        />
+        <p className="mt-3 text-sm leading-6 text-[#5B7867]">
+          Votre localisation n’est utilisée que lorsque vous activez
+          volontairement une fonctionnalité nécessitant votre position.
+        </p>
+      </section>
+
+      <section className="mt-5 rounded-md border border-[#D9DDD8] bg-[#F7F5F0] p-4">
+        <h3 className="font-extrabold">Session</h3>
+        <Button
+          className="mt-3"
+          variant="outline"
+          type="button"
+          onClick={onLogout}
+        >
+          Se déconnecter
+        </Button>
+      </section>
+
+      <section className="mt-5 rounded-md border border-[#E3B09C] bg-[#FFF3EF] p-4">
+        <h3 className="font-extrabold text-[#9E3B1E]">Supprimer mon compte</h3>
+        <p className="mt-2 text-sm leading-6 text-[#7D4B3D]">
+          Cette action supprimera vos informations personnelles. L’historique
+          anonymisé nécessaire au suivi des interventions pourra être conservé.
+        </p>
+        <Button
+          className="mt-4 rounded-md text-[#B84320]"
+          type="button"
+          variant="outline"
+          onClick={onDeleteAccount}
+        >
+          <Trash2 size={16} />
+          Supprimer mon compte
+        </Button>
+      </section>
+    </div>
+  );
+}
+
+function UpcomingProfileAction({
+  mission,
+  onOpenMission,
+}: {
+  mission?: Mission;
+  onOpenMission: () => void;
+}) {
+  return (
+    <section className="brand-card p-5">
+      <SectionTitle>À venir</SectionTitle>
+      {mission ? (
+        <div className="mt-4">
+          <p className="text-sm font-bold text-[#5B7867]">
+            Mission samedi à 9 h
+          </p>
+          <h3 className="mt-1 text-lg font-extrabold">{mission.title}</h3>
+          <p className="mt-1 text-sm text-[#5B7867]">Fondettes</p>
+          <p className="mt-3 text-sm font-extrabold text-[#D9643D]">
+            +{formatCredits(mission.creditsReward ?? 300)} après validation
+          </p>
+          <Button
+            className="mt-4 rounded-md bg-[#1E3D2F] text-white hover:bg-[#173326]"
+            type="button"
+            onClick={onOpenMission}
+          >
+            Voir la mission
+          </Button>
+        </div>
+      ) : (
+        <p className="mt-4 text-sm text-[#5B7867]">
+          Vous n’avez aucune mission prévue.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function RecentActivityCard({
+  onOpenActivity,
+}: {
+  onOpenActivity: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const activities = expanded
+    ? recentProfileActivity
+    : recentProfileActivity.slice(0, 3);
+
+  return (
+    <section className="brand-card p-5">
+      <SectionTitle>Mon activité récente</SectionTitle>
+      <div className="mt-4 space-y-3">
+        {activities.map((activity) => (
+          <div
+            key={`${activity.title}-${activity.date}`}
+            className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-3"
+          >
+            <p className="font-extrabold">{activity.title}</p>
+            <p className="mt-1 text-sm text-[#5B7867]">{activity.detail}</p>
+            <p className="mt-2 text-xs font-bold text-[#5B7867]">
+              {activity.date}
+            </p>
+          </div>
+        ))}
+      </div>
+      <Button
+        className="mt-4"
+        disabled={expanded}
+        variant="outline"
+        type="button"
+        onClick={() => {
+          setExpanded(true);
+          onOpenActivity();
+        }}
+      >
+        {expanded ? 'Activité affichée' : 'Voir toute mon activité'}
+      </Button>
+    </section>
+  );
+}
+
+function CheckRow({
+  checked,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md border border-[#D9DDD8] bg-[#FFFDF8] px-3 py-2 text-sm font-bold transition hover:border-[#5BA681]">
+      <input
+        className="size-4 accent-[#1E3D2F]"
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      {label}
+    </label>
+  );
+}
+
+function ToggleRow({
+  checked,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      className="mt-3 flex w-full items-center justify-between gap-4 rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-3 text-left text-sm font-semibold transition hover:border-[#5BA681]"
+      type="button"
+      onClick={() => onChange(!checked)}
+    >
+      <span>{label}</span>
+      <span
+        className={`flex h-7 w-12 shrink-0 items-center rounded-full p-1 transition ${
+          checked ? 'justify-end bg-[#1E3D2F]' : 'justify-start bg-[#D9DDD8]'
+        }`}
+      >
+        <span className="size-5 rounded-full bg-white shadow" />
+      </span>
+    </button>
+  );
+}
+
+function PasswordModal({
+  onClose,
+  onSave,
+}: {
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [saving, setSaving] = useState(false);
+  const canSave =
+    currentPassword.length > 0 &&
+    newPassword.length >= 6 &&
+    newPassword === confirmation;
+
+  return (
+    <ModalShell>
+      <div className="w-full max-w-md rounded-lg bg-[#FFFDF8] p-5 shadow-2xl">
+        <h2 className="text-xl font-extrabold">Modifier mon mot de passe</h2>
+        <div className="mt-5 space-y-4">
+          <Field label="Mot de passe actuel">
+            <Input
+              type="password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+            />
+          </Field>
+          <Field label="Nouveau mot de passe">
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+            />
+          </Field>
+          <Field label="Confirmation">
+            <Input
+              aria-invalid={
+                confirmation.length > 0 && newPassword !== confirmation
+              }
+              type="password"
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+            />
+          </Field>
+        </div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <Button variant="outline" type="button" onClick={onClose}>
+            Annuler
+          </Button>
+          <Button
+            className="rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+            disabled={!canSave || saving}
+            type="button"
+            onClick={() => {
+              setSaving(true);
+              window.setTimeout(onSave, 450);
+            }}
+          >
+            {saving ? 'Enregistrement...' : 'Enregistrer'}
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function DeleteAccountModal({
+  onCancel,
+  onConfirm,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ModalShell>
+      <div className="w-full max-w-md rounded-lg bg-[#FFFDF8] p-5 shadow-2xl">
+        <h2 className="text-xl font-extrabold">
+          Êtes-vous sûr de vouloir supprimer votre compte ?
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-[#5B7867]">
+          Cette confirmation simule la suppression dans le prototype et vous
+          déconnecte de Riskéo.
+        </p>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <Button variant="outline" type="button" onClick={onCancel}>
+            Annuler
+          </Button>
+          <Button
+            className="rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+            type="button"
+            onClick={onConfirm}
+          >
+            Supprimer définitivement
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
   );
 }
 
@@ -3330,6 +4636,65 @@ function buildQrCells(token: string) {
 
     return edgeMarker || (seed + index * 7) % 5 < 2;
   });
+}
+
+function mergeProfileData(data: Partial<ProfileData>): ProfileData {
+  return {
+    ...defaultProfileData,
+    ...data,
+    missionInterests: {
+      ...defaultProfileData.missionInterests,
+      ...data.missionInterests,
+    },
+    missionDifficulty: {
+      ...defaultProfileData.missionDifficulty,
+      ...data.missionDifficulty,
+    },
+    availability: {
+      ...defaultProfileData.availability,
+      ...data.availability,
+    },
+    pauseMissions: {
+      ...defaultProfileData.pauseMissions,
+      ...data.pauseMissions,
+    },
+    notifications: {
+      ...defaultProfileData.notifications,
+      ...data.notifications,
+    },
+    channels: {
+      ...defaultProfileData.channels,
+      ...data.channels,
+    },
+    privacy: {
+      ...defaultProfileData.privacy,
+      ...data.privacy,
+    },
+  };
+}
+
+function getInitialProfile(session: DemoSession): ProfileData {
+  const profileSession = {
+    firstName: session.firstName,
+    lastName: session.lastName,
+    town: session.town,
+  };
+
+  if (typeof window === 'undefined') {
+    return mergeProfileData(profileSession);
+  }
+
+  const storedProfile = window.localStorage.getItem(profileKey);
+
+  if (!storedProfile) {
+    return mergeProfileData(profileSession);
+  }
+
+  try {
+    return mergeProfileData(JSON.parse(storedProfile) as Partial<ProfileData>);
+  } catch {
+    return mergeProfileData(profileSession);
+  }
 }
 
 function formString(formData: FormData, key: string, fallback: string) {

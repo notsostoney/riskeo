@@ -345,7 +345,12 @@ const citizenNav = [
 ];
 
 const userMenuItems = [
-  { label: 'Mon profil', icon: User, tab: 'profil' as CitizenTab },
+  {
+    label: 'Mon profil',
+    icon: User,
+    tab: 'profil' as CitizenTab,
+    profileSection: 'info' as ProfileSection,
+  },
   {
     label: 'Mes signalements',
     icon: ClipboardList,
@@ -353,7 +358,12 @@ const userMenuItems = [
   },
   { label: 'Mes missions', icon: Trophy, tab: 'missions' as CitizenTab },
   { label: 'Mes crédits', icon: Coins, tab: 'credits' as CitizenTab },
-  { label: 'Notifications', icon: Bell },
+  {
+    label: 'Notifications',
+    icon: Bell,
+    tab: 'profil' as CitizenTab,
+    profileSection: 'notifications' as ProfileSection,
+  },
 ];
 
 const onboardingSteps = [
@@ -404,6 +414,8 @@ const missionStatuses: Record<Mission['status'], string> = {
 export default function Home() {
   const [role, setRole] = useState<Role>('citoyen');
   const [activeTab, setActiveTab] = useState<CitizenTab>('accueil');
+  const [profileInitialSection, setProfileInitialSection] =
+    useState<ProfileSection>('info');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [session, setSession] = useState<DemoSession | null>(null);
   const [showAuth, setShowAuth] = useState(false);
@@ -646,8 +658,11 @@ export default function Home() {
           setShowUserMenu(false);
         }}
         onMenuToggle={() => setShowUserMenu((visible) => !visible)}
-        onNavigate={(tab) => {
+        onNavigate={(tab, profileSection) => {
           setRole('citoyen');
+          if (profileSection) {
+            setProfileInitialSection(profileSection);
+          }
           setActiveTab(tab);
         }}
       />
@@ -672,6 +687,7 @@ export default function Home() {
           onValidateMission={validateMissionCredits}
           onLogout={logout}
           onSessionUpdate={updateSession}
+          profileInitialSection={profileInitialSection}
         />
       ) : (
         <CityExperience
@@ -773,7 +789,7 @@ function ProductHeader({
   onLogout: () => void;
   onMairieAccess: () => void;
   onMenuToggle: () => void;
-  onNavigate: (tab: CitizenTab) => void;
+  onNavigate: (tab: CitizenTab, profileSection?: ProfileSection) => void;
 }) {
   return (
     <header className="sticky top-0 z-30 border-b border-[#D9DDD8] bg-[#FFFDF8]/95 backdrop-blur">
@@ -852,7 +868,7 @@ function ProductHeader({
                   onClick={
                     item.tab
                       ? () => {
-                          onNavigate(item.tab);
+                          onNavigate(item.tab, item.profileSection);
                           onMenuToggle();
                         }
                       : undefined
@@ -906,6 +922,7 @@ function CitizenExperience({
   onValidateMission,
   onLogout,
   onSessionUpdate,
+  profileInitialSection,
 }: {
   activeTab: CitizenTab;
   credits: number;
@@ -925,6 +942,7 @@ function CitizenExperience({
   onValidateMission: (mission: Mission) => void;
   onLogout: () => void;
   onSessionUpdate: (session: DemoSession) => void;
+  profileInitialSection: ProfileSection;
 }) {
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-5 sm:px-6 lg:py-7">
@@ -981,7 +999,9 @@ function CitizenExperience({
 
       {activeTab === 'profil' ? (
         <ProfileView
+          key={profileInitialSection}
           credits={credits}
+          initialSection={profileInitialSection}
           session={session}
           reports={reports}
           missions={missions}
@@ -1992,6 +2012,7 @@ function MissionList({
 
 function ProfileView({
   credits,
+  initialSection,
   session,
   reports,
   missions,
@@ -2000,6 +2021,7 @@ function ProfileView({
   onTabChange,
 }: {
   credits: number;
+  initialSection: ProfileSection;
   session: DemoSession;
   reports: RiskReport[];
   missions: Mission[];
@@ -2014,7 +2036,8 @@ function ProfileView({
   const [draftProfile, setDraftProfile] = useState<ProfileData>(() =>
     getInitialProfile(session),
   );
-  const [activeSection, setActiveSection] = useState<ProfileSection>('info');
+  const [activeSection, setActiveSection] =
+    useState<ProfileSection>(initialSection);
   const [editingInfo, setEditingInfo] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [showPasswordModal, setShowPasswordModal] = useState(false);

@@ -13,26 +13,53 @@ import {
   Circle,
   ClipboardList,
   Coins,
+  Film,
   Eye,
   Hammer,
   HelpCircle,
   Home as HomeIcon,
   Layers3,
+  Library,
   LocateFixed,
   LogOut,
   MapIcon,
   MapPin,
   Plus,
+  QrCode,
+  ReceiptText,
+  Scissors,
   Shield,
+  Sparkles,
+  Store,
+  Ticket,
   TreePine,
   Trophy,
+  Utensils,
   Upload,
   User,
   Users,
+  Waves,
   X,
   type LucideIcon,
 } from 'lucide-react';
 
+import { creditRewards, earningGuides } from '@/data/creditRules';
+import { partners, type Partner } from '@/data/partners';
+import {
+  createRewardPass,
+  creditTransactions,
+  creditsBalance,
+  cityCreditStats,
+  rewardPasses,
+  type CreditTransaction,
+  type RewardPass,
+} from '@/data/redemptions';
+import {
+  rewardCategoryLabels,
+  rewards,
+  type Reward,
+  type RewardCategory,
+} from '@/data/rewards';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -56,7 +83,13 @@ import type {
 } from '@/lib/risk-types';
 
 type Role = 'citoyen' | 'mairie';
-type CitizenTab = 'accueil' | 'carte' | 'signaler' | 'missions' | 'profil';
+type CitizenTab =
+  | 'accueil'
+  | 'carte'
+  | 'signaler'
+  | 'missions'
+  | 'credits'
+  | 'profil';
 type AuthMode = 'login' | 'signup';
 
 type DemoSession = {
@@ -119,6 +152,37 @@ const reportDangerOptions: { value: DangerLevel; label: string }[] = [
   { value: 'Critique', label: 'Critique' },
 ];
 
+const rewardFilters: {
+  id: RewardCategory | 'all' | 'nearby';
+  label: string;
+}[] = [
+  { id: 'all', label: 'Pour vous' },
+  { id: 'nearby', label: 'Près de chez vous' },
+  { id: 'food', label: 'Commerces' },
+  { id: 'restaurant', label: 'Restaurants' },
+  { id: 'hair', label: 'Coiffure' },
+  { id: 'wellness', label: 'Bien-être' },
+  { id: 'sport', label: 'Sport' },
+  { id: 'pool', label: 'Piscine' },
+  { id: 'cinema', label: 'Cinéma' },
+  { id: 'show', label: 'Spectacles' },
+  { id: 'culture', label: 'Culture' },
+  { id: 'leisure', label: 'Loisirs' },
+];
+
+const categoryIcons: Record<RewardCategory, LucideIcon> = {
+  food: Store,
+  restaurant: Utensils,
+  hair: Scissors,
+  wellness: Sparkles,
+  sport: Trophy,
+  pool: Waves,
+  cinema: Film,
+  show: Ticket,
+  culture: Library,
+  leisure: Users,
+};
+
 const headerCounters = [
   { value: 7, label: 'Signalements' },
   { value: 3, label: 'En intervention', tone: 'orange' as const },
@@ -130,14 +194,19 @@ const citizenNav = [
   { id: 'carte' as const, label: 'Carte', icon: MapIcon },
   { id: 'signaler' as const, label: 'Signaler', icon: Camera },
   { id: 'missions' as const, label: 'Missions', icon: Trophy },
+  { id: 'credits' as const, label: 'Crédits', icon: Coins },
   { id: 'profil' as const, label: 'Profil', icon: User },
 ];
 
 const userMenuItems = [
-  { label: 'Mon profil', icon: User },
-  { label: 'Mes signalements', icon: ClipboardList },
-  { label: 'Mes missions', icon: Trophy },
-  { label: 'Mes credits', icon: Coins },
+  { label: 'Mon profil', icon: User, tab: 'profil' as CitizenTab },
+  {
+    label: 'Mes signalements',
+    icon: ClipboardList,
+    tab: 'carte' as CitizenTab,
+  },
+  { label: 'Mes missions', icon: Trophy, tab: 'missions' as CitizenTab },
+  { label: 'Mes crédits', icon: Coins, tab: 'credits' as CitizenTab },
   { label: 'Notifications', icon: Bell },
 ];
 
@@ -158,7 +227,7 @@ const onboardingSteps = [
     icon: Users,
   },
   {
-    title: 'Gagnez des credits',
+    title: 'Gagnez des crédits',
     text: 'Vos missions validées vous font progresser et débloquent des récompenses locales.',
     icon: Coins,
   },
@@ -198,6 +267,16 @@ export default function Home() {
   const [reports, setReports] = useState<RiskReport[]>(initialRiskReports);
   const [missions, setMissions] = useState<Mission[]>(initialMissions);
   const [selectedReportId, setSelectedReportId] = useState(reports[0].id);
+  const [credits, setCredits] = useState(creditsBalance);
+  const [transactions, setTransactions] =
+    useState<CreditTransaction[]>(creditTransactions);
+  const [passes, setPasses] = useState<RewardPass[]>(rewardPasses);
+  const [selectedReward, setSelectedReward] = useState<Reward | null>(null);
+  const [latestPass, setLatestPass] = useState<RewardPass | null>(null);
+  const [validatedMissionIds, setValidatedMissionIds] = useState<string[]>([]);
+  const [missionCreditNotice, setMissionCreditNotice] = useState<number | null>(
+    null,
+  );
   const [newMissionDate, setNewMissionDate] = useState('18 sept.');
   const [newMissionAssignee, setNewMissionAssignee] = useState(
     professionals[0].name,
@@ -335,6 +414,7 @@ export default function Home() {
       assignee: newMissionAssignee,
       volunteers: formNumber(formData, 'volunteers', 4),
       objective: formString(formData, 'objective', selectedReport.description),
+      creditsReward: creditRewards.lightVegetationMaintenance,
     };
 
     setMissions((currentMissions) => [mission, ...currentMissions]);
@@ -345,6 +425,62 @@ export default function Home() {
           : report,
       ),
     );
+  }
+
+  function redeemReward(reward: Reward) {
+    const partner = findPartner(reward.partnerId);
+    const pass = createRewardPass(reward, partner.name);
+
+    setCredits((currentCredits) => currentCredits - reward.creditsCost);
+    setTransactions((currentTransactions) => [
+      {
+        id: `tx-${reward.id}-${Date.now()}`,
+        userId: 'lucas',
+        amount: -reward.creditsCost,
+        type: 'spend',
+        source: 'reward',
+        sourceId: reward.id,
+        createdAt: new Date().toLocaleDateString('fr-FR', {
+          day: 'numeric',
+          month: 'long',
+        }),
+        label: reward.title,
+      },
+      ...currentTransactions,
+    ]);
+    setPasses((currentPasses) => [pass, ...currentPasses]);
+    setLatestPass(pass);
+    setSelectedReward(null);
+  }
+
+  function validateMissionCredits(mission: Mission) {
+    if (validatedMissionIds.includes(mission.id)) {
+      return;
+    }
+
+    const earnedCredits =
+      (mission.creditsReward ?? creditRewards.lightVegetationMaintenance) +
+      (mission.priorityBonus ?? 0);
+
+    setValidatedMissionIds((currentIds) => [...currentIds, mission.id]);
+    setCredits((currentCredits) => currentCredits + earnedCredits);
+    setTransactions((currentTransactions) => [
+      {
+        id: `tx-${mission.id}-${Date.now()}`,
+        userId: 'lucas',
+        amount: earnedCredits,
+        type: 'earn',
+        source: 'mission',
+        sourceId: mission.id,
+        createdAt: new Date().toLocaleDateString('fr-FR', {
+          day: 'numeric',
+          month: 'long',
+        }),
+        label: mission.title,
+      },
+      ...currentTransactions,
+    ]);
+    setMissionCreditNotice(earnedCredits);
   }
 
   return (
@@ -370,12 +506,19 @@ export default function Home() {
           activeTab={activeTab}
           missions={missions}
           nearbyRisks={nearbyRisks}
+          passes={passes}
           reports={reports}
           selectedReport={selectedReport}
           session={session ?? defaultSession}
+          transactions={transactions}
+          credits={credits}
+          missionCreditNotice={missionCreditNotice}
+          validatedMissionIds={validatedMissionIds}
+          onRedeemReward={setSelectedReward}
           onSelectReport={setSelectedReportId}
           onSubmit={handleReportSubmit}
           onTabChange={setActiveTab}
+          onValidateMission={validateMissionCredits}
         />
       ) : (
         <CityExperience
@@ -385,6 +528,9 @@ export default function Home() {
           newMissionDate={newMissionDate}
           reports={reports}
           selectedReport={selectedReport}
+          credits={credits}
+          passes={passes}
+          transactions={transactions}
           onAssigneeChange={setNewMissionAssignee}
           onBackToCitizen={() => setRole('citoyen')}
           onDateChange={setNewMissionDate}
@@ -403,6 +549,19 @@ export default function Home() {
           onModeChange={setAuthMode}
           onSubmit={completeAuth}
         />
+      ) : null}
+
+      {selectedReward ? (
+        <RewardConfirmModal
+          balance={credits}
+          reward={selectedReward}
+          onCancel={() => setSelectedReward(null)}
+          onConfirm={() => redeemReward(selectedReward)}
+        />
+      ) : null}
+
+      {latestPass ? (
+        <PassModal pass={latestPass} onClose={() => setLatestPass(null)} />
       ) : null}
 
       {showOnboarding ? (
@@ -534,7 +693,18 @@ function ProductHeader({
           {showUserMenu ? (
             <div className="absolute right-0 top-12 w-64 rounded-md border border-[#D9DDD8] bg-white p-2 shadow-xl">
               {userMenuItems.map((item) => (
-                <MenuButton key={item.label} icon={item.icon}>
+                <MenuButton
+                  key={item.label}
+                  icon={item.icon}
+                  onClick={
+                    item.tab
+                      ? () => {
+                          onNavigate(item.tab);
+                          onMenuToggle();
+                        }
+                      : undefined
+                  }
+                >
                   {item.label}
                 </MenuButton>
               ))}
@@ -566,24 +736,38 @@ function ProductHeader({
 
 function CitizenExperience({
   activeTab,
+  credits,
+  missionCreditNotice,
   missions,
   nearbyRisks,
+  passes,
   reports,
   selectedReport,
   session,
+  transactions,
+  validatedMissionIds,
+  onRedeemReward,
   onSelectReport,
   onSubmit,
   onTabChange,
+  onValidateMission,
 }: {
   activeTab: CitizenTab;
+  credits: number;
+  missionCreditNotice: number | null;
   missions: Mission[];
   nearbyRisks: RiskReport[];
+  passes: RewardPass[];
   reports: RiskReport[];
   selectedReport: RiskReport;
   session: DemoSession;
+  transactions: CreditTransaction[];
+  validatedMissionIds: string[];
+  onRedeemReward: (reward: Reward) => void;
   onSelectReport: (id: string) => void;
   onSubmit: (payload: ReportFormPayload) => RiskReport;
   onTabChange: (tab: CitizenTab) => void;
+  onValidateMission: (mission: Mission) => void;
 }) {
   return (
     <div className="mx-auto max-w-[1440px] px-4 py-5 sm:px-6 lg:py-7">
@@ -616,10 +800,35 @@ function CitizenExperience({
         </div>
       ) : null}
 
-      {activeTab === 'missions' ? <MissionList missions={missions} /> : null}
+      {activeTab === 'missions' ? (
+        <MissionList
+          missions={missions}
+          validatedMissionIds={validatedMissionIds}
+          onValidateMission={onValidateMission}
+        />
+      ) : null}
+
+      {activeTab === 'credits' ? (
+        <CreditsView
+          balance={credits}
+          missionCreditNotice={missionCreditNotice}
+          missions={missions}
+          passes={passes}
+          transactions={transactions}
+          validatedMissionIds={validatedMissionIds}
+          onRedeemReward={onRedeemReward}
+          onTabChange={onTabChange}
+          onValidateMission={onValidateMission}
+        />
+      ) : null}
 
       {activeTab === 'profil' ? (
-        <ProfileView session={session} reports={reports} missions={missions} />
+        <ProfileView
+          credits={credits}
+          session={session}
+          reports={reports}
+          missions={missions}
+        />
       ) : null}
     </div>
   );
@@ -730,11 +939,14 @@ function FullMapView({
 
 function CityExperience({
   cityStats,
+  credits,
   missions,
   newMissionAssignee,
   newMissionDate,
+  passes,
   reports,
   selectedReport,
+  transactions,
   onAssigneeChange,
   onBackToCitizen,
   onDateChange,
@@ -742,11 +954,14 @@ function CityExperience({
   onSelectReport,
 }: {
   cityStats: { critical: number; unresolved: number };
+  credits: number;
   missions: Mission[];
   newMissionAssignee: string;
   newMissionDate: string;
+  passes: RewardPass[];
   reports: RiskReport[];
   selectedReport: RiskReport;
+  transactions: CreditTransaction[];
   onAssigneeChange: (assignee: string) => void;
   onBackToCitizen: () => void;
   onDateChange: (date: string) => void;
@@ -772,6 +987,7 @@ function CityExperience({
         <nav className="mt-4 space-y-2 text-sm font-bold">
           <SideNavItem active icon={ClipboardList} label="Signalements" />
           <SideNavItem icon={Hammer} label="Missions" />
+          <SideNavItem icon={Coins} label="Crédits & territoire" />
           <SideNavItem icon={MapIcon} label="Parcelles" />
           <SideNavItem icon={Users} label="Citoyens" />
         </nav>
@@ -807,6 +1023,11 @@ function CityExperience({
             <Metric label="Termines" value={1} />
             <Metric label="En attente" value={cityStats.unresolved} />
           </div>
+          <LocalImpactPanel
+            balance={credits}
+            passes={passes}
+            transactions={transactions}
+          />
           <div className="mt-4 space-y-2">
             {reports.map((report) => (
               <ReportListItem
@@ -835,6 +1056,7 @@ function CityExperience({
           </section>
           <RiskDetail selectedReport={selectedReport} />
           <RiskDistribution reports={reports} />
+          <TerritoryCreditsPanel passes={passes} transactions={transactions} />
         </section>
 
         <section className="space-y-5">
@@ -847,6 +1069,7 @@ function CityExperience({
             onMissionCreate={onMissionCreate}
           />
           <StatusLegend />
+          <PartnerSpacePreview />
           <MiniCalendar />
         </section>
       </section>
@@ -1580,9 +1803,13 @@ function MissionCreateForm({
 function MissionList({
   compact = false,
   missions,
+  validatedMissionIds = [],
+  onValidateMission,
 }: {
   compact?: boolean;
   missions: Mission[];
+  validatedMissionIds?: string[];
+  onValidateMission?: (mission: Mission) => void;
 }) {
   return (
     <section
@@ -1591,7 +1818,12 @@ function MissionList({
       {compact ? <SectionTitle>Missions proches</SectionTitle> : null}
       <div className={compact ? 'mt-4 space-y-3' : 'contents'}>
         {missions.map((mission) => (
-          <MissionPreview key={mission.id} mission={mission} />
+          <MissionPreview
+            key={mission.id}
+            mission={mission}
+            validated={validatedMissionIds.includes(mission.id)}
+            onValidateMission={onValidateMission}
+          />
         ))}
       </div>
     </section>
@@ -1599,10 +1831,12 @@ function MissionList({
 }
 
 function ProfileView({
+  credits,
   session,
   reports,
   missions,
 }: {
+  credits: number;
   session: DemoSession;
   reports: RiskReport[];
   missions: Mission[];
@@ -1623,7 +1857,807 @@ function ProfileView({
       <div className="mt-6 grid gap-3 sm:grid-cols-3">
         <Metric label="Signalements" value={reports.length} />
         <Metric label="Missions" value={missions.length} />
-        <Metric label="Crédits" value={120} tone="orange" />
+        <Metric label="Mes crédits" value={credits} tone="orange" />
+      </div>
+    </section>
+  );
+}
+
+function CreditsView({
+  balance,
+  missionCreditNotice,
+  missions,
+  passes,
+  transactions,
+  validatedMissionIds,
+  onRedeemReward,
+  onTabChange,
+  onValidateMission,
+}: {
+  balance: number;
+  missionCreditNotice: number | null;
+  missions: Mission[];
+  passes: RewardPass[];
+  transactions: CreditTransaction[];
+  validatedMissionIds: string[];
+  onRedeemReward: (reward: Reward) => void;
+  onTabChange: (tab: CitizenTab) => void;
+  onValidateMission: (mission: Mission) => void;
+}) {
+  const [filter, setFilter] = useState<RewardCategory | 'all' | 'nearby'>(
+    'all',
+  );
+  const [view, setView] = useState<'rewards' | 'passes' | 'history' | 'earn'>(
+    'rewards',
+  );
+  const activeRewards = rewards
+    .filter((reward) => reward.active)
+    .filter(
+      (reward) =>
+        filter === 'all' || filter === 'nearby' || reward.category === filter,
+    )
+    .sort((a, b) => a.creditsCost - b.creditsCost);
+  const availableRewards = activeRewards.filter(
+    (reward) => reward.creditsCost <= balance,
+  );
+  const soonRewards = activeRewards.filter(
+    (reward) =>
+      reward.creditsCost > balance && reward.creditsCost - balance <= 400,
+  );
+  const discoveryRewards = activeRewards.filter(
+    (reward) => reward.creditsCost - balance > 400,
+  );
+  const nextReward = getNextReward(balance);
+  const nextPartner = nextReward ? findPartner(nextReward.partnerId) : null;
+  const nextMission = missions.find((mission) => mission.creditsReward);
+
+  return (
+    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="space-y-5">
+        <section className="brand-card p-5 sm:p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="text-sm font-extrabold uppercase text-[#5B7867]">
+                Mes crédits
+              </p>
+              <h1 className="mt-2 text-4xl font-extrabold">
+                {formatCredits(balance)}
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-[#5B7867]">
+                Vos missions et signalements validés vous permettent de gagner
+                des crédits à utiliser à Fondettes.
+              </p>
+            </div>
+            <Button
+              className="h-11 rounded-md"
+              type="button"
+              variant="outline"
+              onClick={() => setView('earn')}
+            >
+              Voir comment gagner des crédits
+            </Button>
+          </div>
+        </section>
+
+        {nextReward && nextPartner ? (
+          <section className="brand-card overflow-hidden p-5 sm:p-6">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
+              <div>
+                <SectionTitle>Votre prochain objectif</SectionTitle>
+                <div className="mt-5 flex items-start gap-4">
+                  <CategoryBadge category={nextReward.category} />
+                  <div>
+                    <h2 className="text-2xl font-extrabold">
+                      {nextReward.title}
+                    </h2>
+                    <p className="mt-1 text-sm font-semibold text-[#5B7867]">
+                      {nextPartner.name} · {nextPartner.location}
+                    </p>
+                    <p className="mt-3 text-lg font-extrabold text-[#1E3D2F]">
+                      {formatCredits(nextReward.creditsCost)}
+                    </p>
+                    <p className="mt-1 text-sm font-bold text-[#D9643D]">
+                      Plus que {formatCredits(nextReward.creditsCost - balance)}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-5">
+                  <CreditProgress
+                    current={balance}
+                    target={nextReward.creditsCost}
+                  />
+                </div>
+              </div>
+
+              {nextMission ? (
+                <div className="rounded-md border border-[#E0D6C4] bg-[#F7F5F0] p-4">
+                  <p className="text-sm font-extrabold">
+                    Une mission est disponible
+                  </p>
+                  <h3 className="mt-2 font-extrabold">{nextMission.title}</h3>
+                  <p className="mt-2 text-sm text-[#5B7867]">
+                    {nextMission.date} · +
+                    {formatCredits(
+                      (nextMission.creditsReward ?? 0) +
+                        (nextMission.priorityBonus ?? 0),
+                    )}
+                  </p>
+                  {missionCreditNotice ? (
+                    <p className="mt-3 rounded-md bg-white px-3 py-2 text-sm font-extrabold text-[#1E3D2F]">
+                      Mission validée ✓ +{formatCredits(missionCreditNotice)}
+                    </p>
+                  ) : null}
+                  <div className="mt-4 grid gap-2">
+                    <Button
+                      className="rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+                      type="button"
+                      onClick={() => onTabChange('missions')}
+                    >
+                      Voir les missions
+                    </Button>
+                    <Button
+                      className="rounded-md"
+                      disabled={validatedMissionIds.includes(nextMission.id)}
+                      type="button"
+                      variant="outline"
+                      onClick={() => onValidateMission(nextMission)}
+                    >
+                      {validatedMissionIds.includes(nextMission.id)
+                        ? 'Crédits attribués'
+                        : 'Simuler la validation mairie'}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
+        <section className="brand-card p-5 sm:p-6">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <SectionTitle>Récompenses</SectionTitle>
+            <div className="flex flex-wrap gap-2">
+              {(['rewards', 'passes', 'history', 'earn'] as const).map(
+                (tab) => (
+                  <button
+                    key={tab}
+                    className={`rounded-md px-3 py-2 text-sm font-bold ${
+                      view === tab
+                        ? 'bg-[#1E3D2F] text-white'
+                        : 'bg-[#F7F5F0] text-[#5B7867]'
+                    }`}
+                    type="button"
+                    onClick={() => setView(tab)}
+                  >
+                    {tab === 'rewards'
+                      ? 'Catalogue'
+                      : tab === 'passes'
+                        ? 'Mes avantages'
+                        : tab === 'history'
+                          ? 'Historique'
+                          : 'Gagner'}
+                  </button>
+                ),
+              )}
+            </div>
+          </div>
+
+          {view === 'rewards' ? (
+            <>
+              <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
+                {rewardFilters.map((item) => (
+                  <button
+                    key={item.id}
+                    className={`shrink-0 rounded-md border px-3 py-2 text-sm font-bold ${
+                      filter === item.id
+                        ? 'border-[#1E3D2F] bg-[#EEF1EE] text-[#1E3D2F]'
+                        : 'border-[#D9DDD8] bg-white text-[#5B7867]'
+                    }`}
+                    type="button"
+                    onClick={() => setFilter(item.id)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+
+              <RewardGroup
+                balance={balance}
+                rewards={availableRewards}
+                title="Disponibles maintenant"
+                onRedeemReward={onRedeemReward}
+                onTabChange={onTabChange}
+              />
+              <RewardGroup
+                balance={balance}
+                rewards={soonRewards}
+                title="Bientôt accessibles"
+                onRedeemReward={onRedeemReward}
+                onTabChange={onTabChange}
+              />
+              <RewardGroup
+                balance={balance}
+                rewards={discoveryRewards.slice(0, 6)}
+                title="À découvrir"
+                onRedeemReward={onRedeemReward}
+                onTabChange={onTabChange}
+              />
+            </>
+          ) : null}
+
+          {view === 'passes' ? <PassesView passes={passes} /> : null}
+
+          {view === 'history' ? (
+            <CreditHistory transactions={transactions} />
+          ) : null}
+
+          {view === 'earn' ? <EarnCreditsView /> : null}
+        </section>
+      </div>
+
+      <aside className="space-y-5">
+        <CinemaMunicipalCard />
+        <CreditLoopCard />
+      </aside>
+    </section>
+  );
+}
+
+function RewardGroup({
+  balance,
+  rewards: rewardItems,
+  title,
+  onRedeemReward,
+  onTabChange,
+}: {
+  balance: number;
+  rewards: Reward[];
+  title: string;
+  onRedeemReward: (reward: Reward) => void;
+  onTabChange: (tab: CitizenTab) => void;
+}) {
+  if (rewardItems.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-6">
+      <h3 className="text-lg font-extrabold">{title}</h3>
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
+        {rewardItems.map((reward) => (
+          <RewardCard
+            key={reward.id}
+            balance={balance}
+            reward={reward}
+            onRedeemReward={onRedeemReward}
+            onTabChange={onTabChange}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RewardCard({
+  balance,
+  reward,
+  onRedeemReward,
+  onTabChange,
+}: {
+  balance: number;
+  reward: Reward;
+  onRedeemReward: (reward: Reward) => void;
+  onTabChange: (tab: CitizenTab) => void;
+}) {
+  const partner = findPartner(reward.partnerId);
+  const canRedeem = balance >= reward.creditsCost;
+  const remaining = reward.creditsCost - balance;
+
+  return (
+    <article className="grid gap-3 rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-3 shadow-sm sm:grid-cols-[74px_1fr]">
+      <div className="grid h-20 place-items-center rounded-md bg-[#F7F5F0]">
+        <CategoryBadge category={reward.category} />
+      </div>
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-extrabold uppercase text-[#5B7867]">
+              {rewardCategoryLabels[reward.category]}
+            </p>
+            <h4 className="mt-1 font-extrabold">{reward.title}</h4>
+            <p className="mt-1 text-sm text-[#5B7867]">
+              {partner.name} · Fondettes · {partner.distance}
+            </p>
+          </div>
+          <span className="shrink-0 rounded-md bg-[#EEF1EE] px-2 py-1 text-sm font-extrabold text-[#1E3D2F]">
+            {formatCredits(reward.creditsCost)}
+          </span>
+        </div>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          {canRedeem ? (
+            <p className="text-sm font-semibold text-[#5B7867]">
+              Disponible maintenant
+            </p>
+          ) : (
+            <p className="text-sm font-semibold text-[#D9643D]">
+              Vous avez {formatCredits(balance)} · Plus que{' '}
+              {formatCredits(remaining)}
+            </p>
+          )}
+          <Button
+            className={
+              canRedeem
+                ? 'rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]'
+                : 'rounded-md'
+            }
+            type="button"
+            variant={canRedeem ? 'default' : 'outline'}
+            onClick={() =>
+              canRedeem ? onRedeemReward(reward) : onTabChange('missions')
+            }
+          >
+            {canRedeem
+              ? reward.rewardType === 'booking'
+                ? 'Réserver'
+                : 'Débloquer'
+              : 'Voir les missions'}
+          </Button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function PassesView({ passes }: { passes: RewardPass[] }) {
+  const groups: { status: RewardPass['status']; title: string }[] = [
+    { status: 'Valide', title: 'À utiliser' },
+    { status: 'Utilise', title: 'Utilisés' },
+    { status: 'Expire', title: 'Expirés' },
+  ];
+
+  return (
+    <div className="mt-6 grid gap-4">
+      {groups.map((group) => {
+        const groupPasses = passes.filter(
+          (pass) => pass.status === group.status,
+        );
+
+        return (
+          <div key={group.status}>
+            <h3 className="font-extrabold">{group.title}</h3>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {groupPasses.length > 0 ? (
+                groupPasses.map((pass) => (
+                  <PassCard key={pass.id} pass={pass} />
+                ))
+              ) : (
+                <p className="rounded-md border border-[#D9DDD8] bg-white p-3 text-sm text-[#5B7867]">
+                  Aucun pass dans cette section.
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PassCard({ pass }: { pass: RewardPass }) {
+  return (
+    <article className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-extrabold uppercase text-[#5B7867]">
+            Pass Riskéo
+          </p>
+          <h4 className="mt-1 font-extrabold">{pass.rewardTitle}</h4>
+          <p className="mt-1 text-sm text-[#5B7867]">
+            {pass.partnerName} · Fondettes
+          </p>
+        </div>
+        <span className="rounded-full bg-[#EEF1EE] px-2 py-1 text-xs font-bold">
+          {pass.status}
+        </span>
+      </div>
+      <div className="mt-4 flex items-end justify-between gap-3">
+        <div className="text-sm text-[#5B7867]">
+          <p>Créé le {pass.createdAt}</p>
+          <p>Valable jusqu’au {pass.expiresAt}</p>
+          <p className="mt-2 font-mono text-xs">{pass.rewardRedemptionId}</p>
+        </div>
+        <QrCodeBox token={pass.rewardRedemptionId} />
+      </div>
+    </article>
+  );
+}
+
+function CreditHistory({
+  transactions,
+}: {
+  transactions: CreditTransaction[];
+}) {
+  return (
+    <div className="mt-6 divide-y divide-[#E0D6C4] rounded-md border border-[#D9DDD8] bg-[#FFFDF8]">
+      {transactions.map((transaction) => (
+        <div
+          key={transaction.id}
+          className="grid grid-cols-[80px_1fr_auto] items-center gap-3 p-4"
+        >
+          <span
+            className={`text-xl font-extrabold ${
+              transaction.type === 'earn' ? 'text-[#1E7D4A]' : 'text-[#D9643D]'
+            }`}
+          >
+            {transaction.amount > 0 ? '+' : ''}
+            {transaction.amount}
+          </span>
+          <div>
+            <p className="font-extrabold">{transaction.label}</p>
+            <p className="text-sm text-[#5B7867]">{transaction.createdAt}</p>
+          </div>
+          <ReceiptText className="text-[#5B7867]" size={18} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function EarnCreditsView() {
+  return (
+    <div className="mt-6">
+      <h3 className="text-xl font-extrabold">
+        Gagnez des crédits en agissant pour Fondettes
+      </h3>
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {earningGuides.map((guide) => (
+          <article
+            key={guide.title}
+            className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-4"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h4 className="font-extrabold">{guide.title}</h4>
+              <span className="rounded-md bg-[#EEF1EE] px-2 py-1 text-sm font-extrabold">
+                +{formatCredits(guide.credits)}
+              </span>
+            </div>
+            <p className="mt-2 text-sm leading-6 text-[#5B7867]">
+              {guide.description}
+            </p>
+          </article>
+        ))}
+      </div>
+      <p className="mt-5 rounded-md bg-[#F7F5F0] p-4 text-sm font-semibold text-[#1E3D2F]">
+        Les crédits sont attribués après validation par la mairie :
+        participation, photos, réalisation, envoi, validation, puis crédit.
+      </p>
+    </div>
+  );
+}
+
+function CinemaMunicipalCard() {
+  const cinema = partners.find((partner) => partner.id === 'cine-des-rives');
+
+  if (!cinema) {
+    return null;
+  }
+
+  return (
+    <article className="brand-card overflow-hidden">
+      <div className="terrain-thumb grid min-h-36 place-items-center">
+        <Film className="text-[#1E3D2F]" size={48} />
+      </div>
+      <div className="p-4">
+        <p className="text-xs font-extrabold uppercase text-[#5B7867]">
+          Équipement municipal
+        </p>
+        <h3 className="mt-1 text-xl font-extrabold">{cinema.name}</h3>
+        <p className="mt-1 text-sm font-semibold text-[#5B7867]">
+          {cinema.subtitle}
+        </p>
+        <div className="mt-4 grid gap-2 text-sm text-[#5B7867]">
+          <SmallMeta icon={MapPin}>{cinema.location}</SmallMeta>
+          <SmallMeta icon={Film}>
+            Séances généralistes et films famille
+          </SmallMeta>
+          <SmallMeta icon={Users}>
+            Ciné-débats et événements municipaux
+          </SmallMeta>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function CreditLoopCard() {
+  return (
+    <article className="brand-card p-4">
+      <SectionTitle>Boucle citoyenne</SectionTitle>
+      <div className="mt-4 space-y-2 text-sm font-bold text-[#1E3D2F]">
+        {[
+          'Mission',
+          'Crédits',
+          'Récompense',
+          'Fondettes',
+          'Nouvelle mission',
+        ].map((item) => (
+          <div
+            key={item}
+            className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] px-3 py-2"
+          >
+            {item}
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-sm leading-6 text-[#5B7867]">
+        Agissez pour Fondettes, profitez-en à Fondettes.
+      </p>
+    </article>
+  );
+}
+
+function CategoryBadge({ category }: { category: RewardCategory }) {
+  const Icon = categoryIcons[category];
+
+  return (
+    <span className="grid size-12 shrink-0 place-items-center rounded-md bg-[#1E3D2F] text-white">
+      <Icon size={24} strokeWidth={1.8} />
+    </span>
+  );
+}
+
+function CreditProgress({
+  current,
+  target,
+}: {
+  current: number;
+  target: number;
+}) {
+  const progress = Math.min(Math.round((current / target) * 100), 100);
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between text-sm font-bold text-[#5B7867]">
+        <span>
+          {formatCredits(current)} / {formatCredits(target)}
+        </span>
+        <span>{progress}%</span>
+      </div>
+      <div className="h-3 rounded-full bg-[#EEF1EE]">
+        <span
+          className="block h-3 rounded-full bg-[#D9643D]"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function RewardConfirmModal({
+  balance,
+  reward,
+  onCancel,
+  onConfirm,
+}: {
+  balance: number;
+  reward: Reward;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <ModalShell>
+      <div className="w-full max-w-md rounded-lg bg-[#FFFDF8] p-5 shadow-2xl">
+        <SectionTitle>Utiliser vos crédits ?</SectionTitle>
+        <div className="mt-5 rounded-md border border-[#D9DDD8] bg-[#F7F5F0] p-4">
+          <h2 className="text-xl font-extrabold">{reward.title}</h2>
+          <p className="mt-1 text-sm font-semibold text-[#5B7867]">
+            {findPartner(reward.partnerId).name}
+          </p>
+          <p className="mt-4 text-2xl font-extrabold text-[#D9643D]">
+            {formatCredits(reward.creditsCost)}
+          </p>
+        </div>
+        <div className="mt-5 grid gap-2 text-sm font-semibold">
+          <div className="flex justify-between">
+            <span>Votre solde actuel</span>
+            <span>{formatCredits(balance)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Nouveau solde</span>
+            <span>{formatCredits(balance - reward.creditsCost)}</span>
+          </div>
+        </div>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <Button variant="outline" type="button" onClick={onCancel}>
+            Annuler
+          </Button>
+          <Button
+            className="rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+            type="button"
+            onClick={onConfirm}
+          >
+            Confirmer
+          </Button>
+        </div>
+      </div>
+    </ModalShell>
+  );
+}
+
+function PassModal({
+  pass,
+  onClose,
+}: {
+  pass: RewardPass;
+  onClose: () => void;
+}) {
+  return (
+    <ModalShell>
+      <div className="w-full max-w-md rounded-lg bg-[#FFFDF8] p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-extrabold uppercase text-[#5B7867]">
+              Pass Riskéo
+            </p>
+            <h2 className="mt-1 text-2xl font-extrabold">{pass.rewardTitle}</h2>
+            <p className="mt-1 font-semibold text-[#5B7867]">
+              {pass.partnerName} — Fondettes
+            </p>
+          </div>
+          <Button
+            aria-label="Fermer"
+            size="icon"
+            type="button"
+            variant="outline"
+            onClick={onClose}
+          >
+            <X size={17} />
+          </Button>
+        </div>
+        <div className="mt-6 grid place-items-center rounded-md border border-[#D9DDD8] bg-[#F7F5F0] p-5">
+          <QrCodeBox token={pass.rewardRedemptionId} large />
+        </div>
+        <div className="mt-5 grid gap-2 text-sm font-semibold text-[#5B7867]">
+          <p>Numéro unique : {pass.rewardRedemptionId}</p>
+          <p>Créé le {pass.createdAt}</p>
+          <p>Valable jusqu’au {pass.expiresAt}</p>
+          <p>Statut : {pass.status}</p>
+        </div>
+        <Button
+          className="mt-6 h-11 w-full rounded-md bg-[#1E3D2F] text-white hover:bg-[#173326]"
+          type="button"
+          onClick={onClose}
+        >
+          Terminer
+        </Button>
+      </div>
+    </ModalShell>
+  );
+}
+
+function QrCodeBox({
+  token,
+  large = false,
+}: {
+  token: string;
+  large?: boolean;
+}) {
+  const cells = buildQrCells(token);
+
+  return (
+    <div
+      aria-label={`QR code ${token}`}
+      className={`grid grid-cols-7 gap-1 rounded-md bg-white p-2 ${
+        large ? 'size-40' : 'size-24'
+      }`}
+    >
+      {cells.map((filled, index) => (
+        <span
+          key={`${token}-${index}`}
+          className={
+            filled ? 'rounded-sm bg-[#1E3D2F]' : 'rounded-sm bg-[#EEF1EE]'
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
+function LocalImpactPanel({
+  passes,
+  transactions,
+}: {
+  balance: number;
+  passes: RewardPass[];
+  transactions: CreditTransaction[];
+}) {
+  const spentCredits = Math.max(
+    cityCreditStats.creditsSpent,
+    Math.abs(
+      transactions
+        .filter((transaction) => transaction.type === 'spend')
+        .reduce((sum, transaction) => sum + transaction.amount, 0),
+    ),
+  );
+
+  return (
+    <section className="mt-4 rounded-md border border-[#D9DDD8] bg-[#F7F5F0] p-4">
+      <SectionTitle>Impact local</SectionTitle>
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <Metric
+          label="utilisés localement"
+          value={spentCredits}
+          tone="orange"
+        />
+        <Metric
+          label="récompenses utilisées"
+          value={Math.max(cityCreditStats.rewardsUsed, passes.length)}
+        />
+        <Metric label="lieux sollicités" value={cityCreditStats.partnersUsed} />
+        <Metric
+          label="citoyens bénéficiaires"
+          value={cityCreditStats.citizenBeneficiaries}
+        />
+      </div>
+      <p className="mt-4 text-sm leading-6 text-[#5B7867]">
+        Les crédits Riskéo transforment l’engagement citoyen en activité locale.
+      </p>
+    </section>
+  );
+}
+
+function TerritoryCreditsPanel({
+  passes,
+  transactions,
+}: {
+  passes: RewardPass[];
+  transactions: CreditTransaction[];
+}) {
+  const earnedCredits = transactions
+    .filter((transaction) => transaction.type === 'earn')
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const spentCredits = Math.abs(
+    transactions
+      .filter((transaction) => transaction.type === 'spend')
+      .reduce((sum, transaction) => sum + transaction.amount, 0),
+  );
+
+  return (
+    <section className="brand-card p-4">
+      <SectionTitle>Crédits & territoire</SectionTitle>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <Metric
+          label="crédits distribués"
+          value={Math.max(cityCreditStats.creditsDistributed, earnedCredits)}
+        />
+        <Metric
+          label="crédits dépensés"
+          value={Math.max(cityCreditStats.creditsSpent, spentCredits)}
+          tone="orange"
+        />
+        <Metric
+          label="récompenses utilisées"
+          value={Math.max(cityCreditStats.rewardsUsed, passes.length)}
+        />
+        <Metric label="commerces partenaires" value={partners.length} />
+        <Metric
+          label="équipements utilisés"
+          value={cityCreditStats.municipalEquipmentsUsed}
+        />
+        <Metric
+          label="bénéficiaires"
+          value={cityCreditStats.citizenBeneficiaries}
+        />
+      </div>
+      <div className="mt-5 grid gap-3">
+        {cityCreditStats.topCategories.map((category) => (
+          <ProgressLine
+            key={category.label}
+            color={category.label === 'Commerces' ? '#5BA681' : '#D9643D'}
+            label={category.label}
+            value={category.value}
+          />
+        ))}
       </div>
     </section>
   );
@@ -1746,7 +2780,17 @@ function ReportListItem({
   );
 }
 
-function MissionPreview({ mission }: { mission: Mission }) {
+function MissionPreview({
+  mission,
+  validated = false,
+  onValidateMission,
+}: {
+  mission: Mission;
+  validated?: boolean;
+  onValidateMission?: (mission: Mission) => void;
+}) {
+  const credits = (mission.creditsReward ?? 0) + (mission.priorityBonus ?? 0);
+
   return (
     <article className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-3 shadow-sm">
       <div className="flex items-center justify-between gap-2">
@@ -1767,7 +2811,20 @@ function MissionPreview({ mission }: { mission: Mission }) {
         <SmallMeta icon={CalendarDays}>{mission.date}</SmallMeta>
         <SmallMeta icon={Users}>{mission.volunteers}</SmallMeta>
         <SmallMeta icon={Hammer}>{mission.assignee}</SmallMeta>
+        {credits > 0 ? (
+          <SmallMeta icon={Coins}>+{credits} crédits</SmallMeta>
+        ) : null}
       </div>
+      {onValidateMission ? (
+        <Button
+          className="mt-4 h-9 rounded-md bg-[#1E3D2F] text-white hover:bg-[#173326]"
+          disabled={validated}
+          type="button"
+          onClick={() => onValidateMission(mission)}
+        >
+          {validated ? 'Crédits attribués' : 'Mission validée'}
+        </Button>
+      ) : null}
     </article>
   );
 }
@@ -1841,6 +2898,36 @@ function StatusLegend() {
   );
 }
 
+function PartnerSpacePreview() {
+  const partnerActions = [
+    'Scanner un pass',
+    'Vérifier',
+    'Valider l’utilisation',
+    'Historique',
+  ];
+
+  return (
+    <div className="brand-card p-4">
+      <SectionTitle>Espace partenaire</SectionTitle>
+      <p className="mt-3 text-sm leading-6 text-[#5B7867]">
+        Route future /partner pour contrôler les pass Riskéo chez les commerces
+        et équipements.
+      </p>
+      <div className="mt-4 grid gap-2">
+        {partnerActions.map((action) => (
+          <div
+            key={action}
+            className="flex items-center gap-3 rounded-md border border-[#D9DDD8] bg-[#FFFDF8] px-3 py-2 text-sm font-bold"
+          >
+            <QrCode size={16} />
+            {action}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function MiniCalendar() {
   const days = Array.from({ length: 30 }, (_, index) => index + 1);
 
@@ -1876,7 +2963,7 @@ function MobileBottomNav({
   onTabChange: (tab: CitizenTab) => void;
 }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-[#D9DDD8] bg-[#FFFDF8] px-2 pb-2 pt-1 md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-6 border-t border-[#D9DDD8] bg-[#FFFDF8] px-1 pb-2 pt-1 md:hidden">
       {citizenNav.map((item) => {
         const Icon = item.icon;
         const active = activeTab === item.id;
@@ -1884,7 +2971,7 @@ function MobileBottomNav({
         return (
           <button
             key={item.id}
-            className={`flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[11px] font-bold ${
+            className={`flex flex-col items-center gap-1 rounded-md px-1 py-2 text-[10px] font-bold ${
               active ? 'text-[#D9643D]' : 'text-[#5B7867]'
             }`}
             type="button"
@@ -2065,14 +3152,17 @@ function LegendRow({ color, label }: { color: string; label: string }) {
 function MenuButton({
   icon: Icon,
   children,
+  onClick,
 }: {
   icon: LucideIcon;
   children: ReactNode;
+  onClick?: () => void;
 }) {
   return (
     <button
       className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-semibold hover:bg-[#F7F5F0]"
       type="button"
+      onClick={onClick}
     >
       <Icon size={17} />
       {children}
@@ -2200,6 +3290,46 @@ function parseRiskToolInput(input: unknown) {
         ? payload.photoLabel
         : 'photo-terrain.jpg',
   };
+}
+
+function findPartner(partnerId: string): Partner {
+  return (
+    partners.find((partner) => partner.id === partnerId) ?? {
+      id: 'unknown',
+      name: 'Partenaire local',
+      category: 'leisure',
+      subtitle: 'Fondettes',
+      location: 'Fondettes',
+      distance: 'à proximité',
+      type: 'commerce',
+      isDemoPartner: true,
+    }
+  );
+}
+
+function getNextReward(balance: number) {
+  return rewards
+    .filter((reward) => reward.active && reward.creditsCost > balance)
+    .sort((a, b) => a.creditsCost - b.creditsCost)[0];
+}
+
+function formatCredits(value: number) {
+  return `${new Intl.NumberFormat('fr-FR').format(value)} crédits`;
+}
+
+function buildQrCells(token: string) {
+  const seed = token
+    .split('')
+    .reduce((total, character) => total + character.charCodeAt(0), 0);
+
+  return Array.from({ length: 49 }, (_, index) => {
+    const edgeMarker =
+      (index < 3 && index % 7 < 3) ||
+      (index < 6 && index % 7 > 4) ||
+      (index > 34 && index % 7 < 3);
+
+    return edgeMarker || (seed + index * 7) % 5 < 2;
+  });
 }
 
 function formString(formData: FormData, key: string, fallback: string) {

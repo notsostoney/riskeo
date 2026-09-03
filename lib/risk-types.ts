@@ -57,6 +57,8 @@ export type Mission = {
   assignee: string;
   volunteers: number;
   objective: string;
+  creditsReward?: number;
+  priorityBonus?: number;
 };
 
 export type Professional = {

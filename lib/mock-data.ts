@@ -1,3 +1,4 @@
+import { creditRewards } from '@/data/creditRules';
 import type { Mission, Professional, RiskReport } from './risk-types';
 
 export const initialRiskReports: RiskReport[] = [
@@ -64,18 +65,21 @@ export const initialMissions: Mission[] = [
     assignee: 'Foret Claire',
     volunteers: 6,
     objective:
-      'Degager la vegetation morte sur 120 m et securiser la bordure des habitations.',
+      'Dégager la végétation morte sur 120 m et sécuriser la bordure des habitations.',
+    creditsReward: creditRewards.lightVegetationMaintenance,
   },
   {
     id: 'MIS-099',
-    title: 'Degagement acces Vallon',
+    title: 'Dégagement accès Vallon',
     reportId: 'SIG-241',
     status: 'A preparer',
     date: 'A definir',
     assignee: 'Services techniques',
     volunteers: 2,
     objective:
-      "Retirer les encombrants et verifier le gabarit d'acces secours.",
+      "Retirer les encombrants et vérifier le gabarit d'accès secours.",
+    creditsReward: creditRewards.emergencyAccessClearing,
+    priorityBonus: creditRewards.priorityMissionBonus,
   },
 ];
 

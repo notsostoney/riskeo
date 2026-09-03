@@ -4416,16 +4416,45 @@ function CreditsView({
   const nextPartner = nextReward ? findPartner(nextReward.partnerId) : null;
   const nextMission = missions.find((mission) => mission.creditsReward);
   const creditTabs = [
-    { id: 'rewards', label: 'Catalogue' },
-    { id: 'passes', label: 'Mes avantages' },
-    { id: 'history', label: 'Historique' },
-    { id: 'earn', label: 'Gagner' },
+    { id: 'rewards', label: 'Catalogue', shortLabel: 'Catalogue' },
+    { id: 'passes', label: 'Mes avantages', shortLabel: 'Avantages' },
+    { id: 'history', label: 'Historique', shortLabel: 'Histo' },
+    { id: 'earn', label: 'Gagner', shortLabel: 'Gagner' },
   ] as const;
 
   return (
     <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-5">
       <div className="space-y-4 sm:space-y-5">
-        <section className="brand-card p-4 sm:p-6">
+        <section className="brand-card overflow-hidden md:hidden">
+          <div className="bg-[#1E3D2F] p-4 text-white">
+            <p className="text-xs font-extrabold uppercase text-[#CFE2D4]">
+              Mon solde
+            </p>
+            <h1 className="mt-2 text-4xl font-extrabold leading-none">
+              {new Intl.NumberFormat('fr-FR').format(balance)}
+            </h1>
+            <p className="mt-1 text-sm font-bold text-[#F7F5F0]">crédits</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 p-3">
+            <Button
+              className="h-11 rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+              type="button"
+              onClick={() => setView('rewards')}
+            >
+              Catalogue
+            </Button>
+            <Button
+              className="h-11 rounded-md"
+              type="button"
+              variant="outline"
+              onClick={() => setView('earn')}
+            >
+              Gagner
+            </Button>
+          </div>
+        </section>
+
+        <section className="brand-card hidden p-4 md:block sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-sm font-extrabold uppercase text-[#5B7867]">
@@ -4451,7 +4480,55 @@ function CreditsView({
         </section>
 
         {nextReward && nextPartner ? (
-          <section className="brand-card overflow-hidden p-4 sm:p-6">
+          <section className="brand-card overflow-hidden p-4 md:hidden">
+            <SectionTitle>Prochain objectif</SectionTitle>
+            <div className="mt-4 flex items-start gap-3">
+              <CategoryBadge category={nextReward.category} />
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-extrabold leading-tight">
+                  {nextReward.title}
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-[#5B7867]">
+                  {nextPartner.name}
+                </p>
+                <div className="mt-3">
+                  <CreditProgress
+                    current={balance}
+                    target={nextReward.creditsCost}
+                  />
+                </div>
+                <p className="mt-2 text-sm font-extrabold text-[#D9643D]">
+                  Plus que {formatCredits(nextReward.creditsCost - balance)}
+                </p>
+              </div>
+            </div>
+            {nextMission ? (
+              <div className="mt-4 rounded-md border border-[#E0D6C4] bg-[#F7F5F0] p-3">
+                <p className="text-xs font-extrabold uppercase text-[#5B7867]">
+                  Mission disponible
+                </p>
+                <h3 className="mt-1 font-extrabold">{nextMission.title}</h3>
+                <p className="mt-1 text-sm font-semibold text-[#5B7867]">
+                  {nextMission.date} · +
+                  {formatCredits(
+                    (nextMission.creditsReward ?? 0) +
+                      (nextMission.priorityBonus ?? 0),
+                  )}
+                </p>
+                <Button
+                  className="mt-3 h-11 w-full rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+                  type="button"
+                  onClick={() => onTabChange('missions')}
+                >
+                  Voir la mission
+                </Button>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {nextReward && nextPartner ? (
+          <section className="brand-card hidden overflow-hidden p-4 md:block sm:p-6">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
               <div>
                 <SectionTitle>Votre prochain objectif</SectionTitle>
@@ -4527,11 +4604,11 @@ function CreditsView({
         <section className="brand-card p-4 sm:p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <SectionTitle>Récompenses</SectionTitle>
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            <div className="sticky top-[73px] z-20 -mx-4 grid grid-cols-4 gap-1 border-y border-[#E0D6C4] bg-[#FFFDF8] px-4 py-2 sm:static sm:mx-0 sm:flex sm:flex-wrap sm:border-0 sm:bg-transparent sm:p-0">
               {creditTabs.map((tab) => (
                 <button
                   key={tab.id}
-                  className={`min-h-11 rounded-md px-3 py-2 text-sm font-bold transition ${
+                  className={`min-h-11 rounded-md px-2 py-2 text-xs font-bold transition sm:px-3 sm:text-sm ${
                     view === tab.id
                       ? 'bg-[#1E3D2F] text-white'
                       : 'bg-[#F7F5F0] text-[#5B7867] hover:bg-[#EEF1EE]'
@@ -4539,7 +4616,8 @@ function CreditsView({
                   type="button"
                   onClick={() => setView(tab.id)}
                 >
-                  {tab.label}
+                  <span className="sm:hidden">{tab.shortLabel}</span>
+                  <span className="hidden sm:inline">{tab.label}</span>
                 </button>
               ))}
             </div>
@@ -4563,6 +4641,11 @@ function CreditsView({
                   </button>
                 ))}
               </div>
+              <p className="mt-2 text-sm font-semibold text-[#5B7867] md:hidden">
+                {activeRewards.length} récompense
+                {activeRewards.length > 1 ? 's' : ''} affichée
+                {activeRewards.length > 1 ? 's' : ''}
+              </p>
 
               <RewardGroup
                 balance={balance}

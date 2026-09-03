@@ -3732,6 +3732,12 @@ function AvailabilitySection({
         month: 'long',
       })
     : '18 septembre';
+  const selectedSlots = Object.entries(profile.availability).flatMap(
+    ([day, values]) =>
+      slots
+        .filter((slot) => values[slot.key])
+        .map((slot) => `${day} ${slot.label.toLowerCase()}`),
+  );
 
   return (
     <div>
@@ -3741,7 +3747,58 @@ function AvailabilitySection({
         recommande les missions les plus adaptées.
       </p>
 
-      <div className="mt-5 overflow-x-auto">
+      <div className="mt-5 rounded-md border border-[#D9DDD8] bg-[#F7F5F0] p-3 md:hidden">
+        <p className="text-xs font-extrabold uppercase text-[#5B7867]">
+          Créneaux sélectionnés
+        </p>
+        <p className="mt-1 text-sm font-bold text-[#1E3D2F]">
+          {selectedSlots.length > 0
+            ? selectedSlots.slice(0, 3).join(', ')
+            : 'Aucun créneau choisi'}
+          {selectedSlots.length > 3 ? ` +${selectedSlots.length - 3}` : ''}
+        </p>
+      </div>
+
+      <div className="mt-5 grid gap-3 md:hidden">
+        {Object.entries(profile.availability).map(([day, values]) => (
+          <section
+            key={day}
+            className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-3"
+          >
+            <p className="font-extrabold">{day}</p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {slots.map((slot) => (
+                <button
+                  key={`${day}-${slot.key}`}
+                  className={`min-h-11 rounded-md border px-2 py-2 text-xs font-extrabold transition ${
+                    values[slot.key]
+                      ? 'border-[#1E3D2F] bg-[#EEF1EE] text-[#1E3D2F]'
+                      : 'border-[#D9DDD8] bg-white text-[#5B7867] hover:border-[#5BA681]'
+                  }`}
+                  type="button"
+                  aria-pressed={values[slot.key]}
+                  onClick={() =>
+                    onSave({
+                      ...profile,
+                      availability: {
+                        ...profile.availability,
+                        [day]: {
+                          ...values,
+                          [slot.key]: !values[slot.key],
+                        },
+                      },
+                    })
+                  }
+                >
+                  {slot.label}
+                </button>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+
+      <div className="mt-5 hidden md:block">
         <div className="min-w-[560px] rounded-md border border-[#D9DDD8] bg-[#FFFDF8]">
           {Object.entries(profile.availability).map(([day, values]) => (
             <div
@@ -3758,6 +3815,7 @@ function AvailabilitySection({
                       : 'border-[#D9DDD8] bg-white text-[#5B7867] hover:border-[#5BA681]'
                   }`}
                   type="button"
+                  aria-pressed={values[slot.key]}
                   onClick={() =>
                     onSave({
                       ...profile,
@@ -3832,9 +3890,9 @@ function AvailabilitySection({
             Missions en pause jusqu’au {pauseEndLabel}.
           </p>
         ) : null}
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 grid gap-2 sm:flex sm:flex-wrap">
           <Button
-            className="rounded-md bg-[#1E3D2F] text-white hover:bg-[#173326]"
+            className="h-11 rounded-md bg-[#1E3D2F] text-white hover:bg-[#173326]"
             type="button"
             onClick={() =>
               onSave({
@@ -3853,6 +3911,7 @@ function AvailabilitySection({
           </Button>
           {profile.pauseMissions.active ? (
             <Button
+              className="h-11 rounded-md"
               variant="outline"
               type="button"
               onClick={() =>
@@ -4356,17 +4415,23 @@ function CreditsView({
   const nextReward = getNextReward(balance);
   const nextPartner = nextReward ? findPartner(nextReward.partnerId) : null;
   const nextMission = missions.find((mission) => mission.creditsReward);
+  const creditTabs = [
+    { id: 'rewards', label: 'Catalogue' },
+    { id: 'passes', label: 'Mes avantages' },
+    { id: 'history', label: 'Historique' },
+    { id: 'earn', label: 'Gagner' },
+  ] as const;
 
   return (
-    <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="space-y-5">
-        <section className="brand-card p-5 sm:p-6">
+    <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:gap-5">
+      <div className="space-y-4 sm:space-y-5">
+        <section className="brand-card p-4 sm:p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <p className="text-sm font-extrabold uppercase text-[#5B7867]">
                 Mes crédits
               </p>
-              <h1 className="mt-2 text-4xl font-extrabold">
+              <h1 className="mt-2 text-3xl font-extrabold sm:text-4xl">
                 {formatCredits(balance)}
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[#5B7867]">
@@ -4375,7 +4440,7 @@ function CreditsView({
               </p>
             </div>
             <Button
-              className="h-11 rounded-md"
+              className="h-11 w-full rounded-md sm:w-fit"
               type="button"
               variant="outline"
               onClick={() => setView('earn')}
@@ -4386,14 +4451,14 @@ function CreditsView({
         </section>
 
         {nextReward && nextPartner ? (
-          <section className="brand-card overflow-hidden p-5 sm:p-6">
+          <section className="brand-card overflow-hidden p-4 sm:p-6">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
               <div>
                 <SectionTitle>Votre prochain objectif</SectionTitle>
-                <div className="mt-5 flex items-start gap-4">
+                <div className="mt-5 flex items-start gap-3 sm:gap-4">
                   <CategoryBadge category={nextReward.category} />
-                  <div>
-                    <h2 className="text-2xl font-extrabold">
+                  <div className="min-w-0">
+                    <h2 className="text-xl font-extrabold leading-tight sm:text-2xl">
                       {nextReward.title}
                     </h2>
                     <p className="mt-1 text-sm font-semibold text-[#5B7867]">
@@ -4435,14 +4500,14 @@ function CreditsView({
                   ) : null}
                   <div className="mt-4 grid gap-2">
                     <Button
-                      className="rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
+                      className="h-11 rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]"
                       type="button"
                       onClick={() => onTabChange('missions')}
                     >
                       Voir les missions
                     </Button>
                     <Button
-                      className="rounded-md"
+                      className="h-11 rounded-md"
                       disabled={validatedMissionIds.includes(nextMission.id)}
                       type="button"
                       variant="outline"
@@ -4459,42 +4524,34 @@ function CreditsView({
           </section>
         ) : null}
 
-        <section className="brand-card p-5 sm:p-6">
+        <section className="brand-card p-4 sm:p-6">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <SectionTitle>Récompenses</SectionTitle>
-            <div className="flex flex-wrap gap-2">
-              {(['rewards', 'passes', 'history', 'earn'] as const).map(
-                (tab) => (
-                  <button
-                    key={tab}
-                    className={`rounded-md px-3 py-2 text-sm font-bold ${
-                      view === tab
-                        ? 'bg-[#1E3D2F] text-white'
-                        : 'bg-[#F7F5F0] text-[#5B7867]'
-                    }`}
-                    type="button"
-                    onClick={() => setView(tab)}
-                  >
-                    {tab === 'rewards'
-                      ? 'Catalogue'
-                      : tab === 'passes'
-                        ? 'Mes avantages'
-                        : tab === 'history'
-                          ? 'Historique'
-                          : 'Gagner'}
-                  </button>
-                ),
-              )}
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              {creditTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  className={`min-h-11 rounded-md px-3 py-2 text-sm font-bold transition ${
+                    view === tab.id
+                      ? 'bg-[#1E3D2F] text-white'
+                      : 'bg-[#F7F5F0] text-[#5B7867] hover:bg-[#EEF1EE]'
+                  }`}
+                  type="button"
+                  onClick={() => setView(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
           {view === 'rewards' ? (
             <>
-              <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
+              <div className="-mx-4 mt-5 flex gap-2 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
                 {rewardFilters.map((item) => (
                   <button
                     key={item.id}
-                    className={`shrink-0 rounded-md border px-3 py-2 text-sm font-bold ${
+                    className={`min-h-10 shrink-0 rounded-md border px-3 py-2 text-sm font-bold ${
                       filter === item.id
                         ? 'border-[#1E3D2F] bg-[#EEF1EE] text-[#1E3D2F]'
                         : 'border-[#D9DDD8] bg-white text-[#5B7867]'
@@ -4541,7 +4598,7 @@ function CreditsView({
         </section>
       </div>
 
-      <aside className="space-y-5">
+      <aside className="hidden space-y-5 xl:block">
         <CinemaMunicipalCard />
         <CreditLoopCard />
       </aside>
@@ -4601,12 +4658,12 @@ function RewardCard({
 
   return (
     <article className="grid gap-3 rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-3 shadow-sm sm:grid-cols-[74px_1fr]">
-      <div className="grid h-20 place-items-center rounded-md bg-[#F7F5F0]">
+      <div className="grid h-16 place-items-center rounded-md bg-[#F7F5F0] sm:h-20">
         <CategoryBadge category={reward.category} />
       </div>
       <div>
-        <div className="flex items-start justify-between gap-3">
-          <div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
+          <div className="min-w-0">
             <p className="text-xs font-extrabold uppercase text-[#5B7867]">
               {rewardCategoryLabels[reward.category]}
             </p>
@@ -4615,7 +4672,7 @@ function RewardCard({
               {partner.name} · Fondettes · {partner.distance}
             </p>
           </div>
-          <span className="shrink-0 rounded-md bg-[#EEF1EE] px-2 py-1 text-sm font-extrabold text-[#1E3D2F]">
+          <span className="w-fit shrink-0 rounded-md bg-[#EEF1EE] px-2 py-1 text-sm font-extrabold text-[#1E3D2F]">
             {formatCredits(reward.creditsCost)}
           </span>
         </div>
@@ -4631,11 +4688,9 @@ function RewardCard({
             </p>
           )}
           <Button
-            className={
-              canRedeem
-                ? 'rounded-md bg-[#D9643D] text-white hover:bg-[#C6532E]'
-                : 'rounded-md'
-            }
+            className={`h-10 w-full rounded-md sm:w-fit ${
+              canRedeem ? 'bg-[#D9643D] text-white hover:bg-[#C6532E]' : ''
+            }`}
             type="button"
             variant={canRedeem ? 'default' : 'outline'}
             onClick={() =>
@@ -4706,11 +4761,13 @@ function PassCard({ pass }: { pass: RewardPass }) {
           {pass.status}
         </span>
       </div>
-      <div className="mt-4 flex items-end justify-between gap-3">
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="text-sm text-[#5B7867]">
           <p>Créé le {pass.createdAt}</p>
           <p>Valable jusqu’au {pass.expiresAt}</p>
-          <p className="mt-2 font-mono text-xs">{pass.rewardRedemptionId}</p>
+          <p className="mt-2 break-all font-mono text-xs">
+            {pass.rewardRedemptionId}
+          </p>
         </div>
         <QrCodeBox token={pass.rewardRedemptionId} />
       </div>
@@ -4728,21 +4785,21 @@ function CreditHistory({
       {transactions.map((transaction) => (
         <div
           key={transaction.id}
-          className="grid grid-cols-[80px_1fr_auto] items-center gap-3 p-4"
+          className="grid grid-cols-[1fr_auto] items-start gap-3 p-4 sm:grid-cols-[80px_1fr_auto] sm:items-center"
         >
           <span
-            className={`text-xl font-extrabold ${
+            className={`rounded-md bg-[#F7F5F0] px-2 py-1 text-lg font-extrabold sm:bg-transparent sm:p-0 sm:text-xl ${
               transaction.type === 'earn' ? 'text-[#1E7D4A]' : 'text-[#D9643D]'
             }`}
           >
             {transaction.amount > 0 ? '+' : ''}
             {transaction.amount}
           </span>
-          <div>
+          <ReceiptText className="text-[#5B7867] sm:order-last" size={18} />
+          <div className="col-span-2 sm:col-span-1">
             <p className="font-extrabold">{transaction.label}</p>
             <p className="text-sm text-[#5B7867]">{transaction.createdAt}</p>
           </div>
-          <ReceiptText className="text-[#5B7867]" size={18} />
         </div>
       ))}
     </div>
@@ -4761,9 +4818,9 @@ function EarnCreditsView() {
             key={guide.title}
             className="rounded-md border border-[#D9DDD8] bg-[#FFFDF8] p-4"
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
               <h4 className="font-extrabold">{guide.title}</h4>
-              <span className="rounded-md bg-[#EEF1EE] px-2 py-1 text-sm font-extrabold">
+              <span className="w-fit rounded-md bg-[#EEF1EE] px-2 py-1 text-sm font-extrabold">
                 +{formatCredits(guide.credits)}
               </span>
             </div>

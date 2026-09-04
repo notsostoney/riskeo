@@ -14,11 +14,11 @@ export const metadata: Metadata = {
     'Plateforme locale pour signaler, prioriser et traiter les risques de territoire.',
   icons: {
     icon: [
-      { url: '/favicon.png', type: 'image/png' },
-      { url: '/brand/app-icon.png', type: 'image/png' },
+      { url: '/favicon.png?v=riskeo', type: 'image/png' },
+      { url: '/brand/app-icon.png?v=riskeo', type: 'image/png' },
     ],
-    shortcut: '/favicon.png',
-    apple: '/brand/app-icon.png',
+    shortcut: '/favicon.png?v=riskeo',
+    apple: '/brand/app-icon.png?v=riskeo',
   },
 };
 

@@ -13,7 +13,11 @@ export const metadata: Metadata = {
   description:
     'Plateforme locale pour signaler, prioriser et traiter les risques de territoire.',
   icons: {
-    icon: '/brand/app-icon.png',
+    icon: [
+      { url: '/favicon.png', type: 'image/png' },
+      { url: '/brand/app-icon.png', type: 'image/png' },
+    ],
+    shortcut: '/favicon.png',
     apple: '/brand/app-icon.png',
   },
 };

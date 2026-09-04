@@ -1,13 +1,8 @@
-import type { NextConfig } from "next";
-
-const isGitHubPages = process.env.GITHUB_ACTIONS === "true";
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  output: "export",
+  output: process.env.GITHUB_PAGES === 'true' ? 'export' : undefined,
   trailingSlash: true,
-
-  basePath: isGitHubPages ? "/riskeo" : "",
-  assetPrefix: isGitHubPages ? "/riskeo/" : "",
 
   images: {
     unoptimized: true,

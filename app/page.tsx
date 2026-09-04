@@ -1005,9 +1005,10 @@ export default function Home() {
 
     const nextPath =
       tab === 'help' ? '/help' : tab === 'credits' ? '/credits' : '/';
+    const nextBrowserPath = withRuntimeBasePath(nextPath);
 
-    if (window.location.pathname !== nextPath) {
-      window.history.pushState(null, '', nextPath);
+    if (window.location.pathname !== nextBrowserPath) {
+      window.history.pushState(null, '', nextBrowserPath);
       return;
     }
   }
@@ -6002,15 +6003,40 @@ function getInitialHelpRequests(): HelpRequest[] {
 }
 
 function getTabFromPath(pathname: string): CitizenTab {
-  if (pathname === '/help') {
+  const appPath = stripRuntimeBasePath(pathname);
+
+  if (appPath === '/help') {
     return 'help';
   }
 
-  if (pathname === '/credits') {
+  if (appPath === '/credits') {
     return 'credits';
   }
 
   return 'accueil';
+}
+
+function stripRuntimeBasePath(pathname: string) {
+  if (pathname === '/riskeo') {
+    return '/';
+  }
+
+  if (pathname.startsWith('/riskeo/')) {
+    return pathname.slice('/riskeo'.length) || '/';
+  }
+
+  return pathname;
+}
+
+function withRuntimeBasePath(pathname: string) {
+  if (
+    window.location.pathname === '/riskeo' ||
+    window.location.pathname.startsWith('/riskeo/')
+  ) {
+    return pathname === '/' ? '/riskeo/' : `/riskeo${pathname}`;
+  }
+
+  return pathname;
 }
 
 function normalizeHelpText(value: string) {

@@ -38,6 +38,43 @@ jobs:
       - name: Build Riskéo
         run: npm run build
 
+      - name: Prepare GitHub Pages paths
+        run: |
+          node --input-type=module <<'NODE'
+          import { copyFileSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+          import { extname, join } from 'node:path';
+
+          const root = 'dist/client';
+          const textExtensions = new Set(['.css', '.html', '.js', '.json', '.rsc']);
+
+          function walk(directory) {
+            for (const entry of readdirSync(directory)) {
+              const filePath = join(directory, entry);
+              const stat = statSync(filePath);
+
+              if (stat.isDirectory()) {
+                walk(filePath);
+                continue;
+              }
+
+              if (!textExtensions.has(extname(filePath))) {
+                continue;
+              }
+
+              const updated = readFileSync(filePath, 'utf8')
+                .replaceAll('/_next/', '/riskeo/_next/')
+                .replaceAll('/brand/', '/riskeo/brand/')
+                .replaceAll('/favicon.', '/riskeo/favicon.');
+
+              writeFileSync(filePath, updated);
+            }
+          }
+
+          walk(root);
+          copyFileSync(join(root, 'index.html'), join(root, '404.html'));
+          writeFileSync(join(root, '.nojekyll'), '');
+          NODE
+
       - name: Upload site
         uses: actions/upload-pages-artifact@v4
         with:

@@ -62,9 +62,9 @@ jobs:
               }
 
               const updated = readFileSync(filePath, 'utf8')
-                .replaceAll('/_next/', '/riskeo/_next/')
-                .replaceAll('/brand/', '/riskeo/brand/')
-                .replaceAll('/favicon.', '/riskeo/favicon.');
+                .replaceAll('/_next/', '/riskeoproto/_next/')
+                .replaceAll('/brand/', '/riskeoproto/brand/')
+                .replaceAll('/favicon.', '/riskeoproto/favicon.');
 
               writeFileSync(filePath, updated);
             }

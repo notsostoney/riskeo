@@ -6435,12 +6435,12 @@ function getTabFromPath(pathname: string): CitizenTab {
 }
 
 function stripRuntimeBasePath(pathname: string) {
-  if (pathname === '/riskeo') {
+  if (pathname === '/riskeoproto') {
     return '/';
   }
 
-  if (pathname.startsWith('/riskeo/')) {
-    return pathname.slice('/riskeo'.length) || '/';
+  if (pathname.startsWith('/riskeoproto/')) {
+    return pathname.slice('/riskeoproto'.length) || '/';
   }
 
   return pathname;
@@ -6448,10 +6448,10 @@ function stripRuntimeBasePath(pathname: string) {
 
 function withRuntimeBasePath(pathname: string) {
   if (
-    window.location.pathname === '/riskeo' ||
-    window.location.pathname.startsWith('/riskeo/')
+    window.location.pathname === '/riskeoproto' ||
+    window.location.pathname.startsWith('/riskeoproto/')
   ) {
-    return pathname === '/' ? '/riskeo/' : `/riskeo${pathname}`;
+    return pathname === '/' ? '/riskeoproto/' : `/riskeoproto${pathname}`;
   }
 
   return pathname;

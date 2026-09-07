@@ -115,6 +115,10 @@ type DemoSession = {
   town: string;
 };
 
+type AuthSession = DemoSession & {
+  role: Role;
+};
+
 type AuthAccount = DemoSession & {
   id: string;
   role: Role;
@@ -867,7 +871,7 @@ export default function Home() {
   const [profileInitialSection, setProfileInitialSection] =
     useState<ProfileSection>('info');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
-  const [session, setSession] = useState<DemoSession | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -928,11 +932,11 @@ export default function Home() {
       const stored = window.localStorage.getItem(sessionKey);
       if (stored) {
         try {
-          const restoredSession = JSON.parse(stored) as DemoSession & {
-            role?: Role;
-          };
+          const restoredSession = normalizeStoredSession(
+            JSON.parse(stored) as Partial<AuthSession>,
+          );
           setSession(restoredSession);
-          setRole(restoredSession.role ?? 'citoyen');
+          setRole(restoredSession.role);
           setAuthReady(true);
         } catch {
           window.localStorage.removeItem(sessionKey);
@@ -1014,7 +1018,7 @@ export default function Home() {
       sessionKey,
       JSON.stringify({ ...data, role: nextRole }),
     );
-    setSession(data);
+    setSession({ ...data, role: nextRole });
     setRole(nextRole);
     setShowAuth(false);
     setAuthReady(true);
@@ -1040,7 +1044,7 @@ export default function Home() {
 
   function updateSession(data: DemoSession) {
     window.localStorage.setItem(sessionKey, JSON.stringify({ ...data, role }));
-    setSession(data);
+    setSession({ ...data, role });
   }
 
   function handleCitizenNavigate(
@@ -1176,6 +1180,9 @@ export default function Home() {
         showUserMenu={showUserMenu}
         onLogout={logout}
         onMairieAccess={() => {
+          if (session.role !== 'mairie') {
+            return;
+          }
           setRole('mairie');
           setShowUserMenu(false);
         }}
@@ -1303,7 +1310,7 @@ function ProductHeader({
   onNavigate,
 }: {
   activeTab: CitizenTab;
-  session: DemoSession;
+  session: AuthSession;
   showUserMenu: boolean;
   onLogout: () => void;
   onMairieAccess: () => void;
@@ -1397,14 +1404,16 @@ function ProductHeader({
                 </MenuButton>
               ))}
               <div className="my-2 h-px bg-[#D9DDD8]" />
-              <button
-                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-semibold text-[#5B7867] hover:bg-[#F7F5F0]"
-                type="button"
-                onClick={onMairieAccess}
-              >
-                <Building2 size={17} />
-                Acces mairie
-              </button>
+              {session.role === 'mairie' ? (
+                <button
+                  className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-semibold text-[#5B7867] hover:bg-[#F7F5F0]"
+                  type="button"
+                  onClick={onMairieAccess}
+                >
+                  <Building2 size={17} />
+                  Acces mairie
+                </button>
+              ) : null}
               <MenuButton
                 icon={HelpCircle}
                 onClick={() => {
@@ -6244,6 +6253,16 @@ function toSession(account: AuthAccount): DemoSession {
     lastName: account.lastName,
     email: account.email,
     town: account.town,
+  };
+}
+
+function normalizeStoredSession(session: Partial<AuthSession>): AuthSession {
+  return {
+    firstName: session.firstName || defaultSession.firstName,
+    lastName: session.lastName || defaultSession.lastName,
+    email: session.email || defaultSession.email,
+    town: session.town || defaultSession.town,
+    role: session.role === 'mairie' ? 'mairie' : 'citoyen',
   };
 }
 

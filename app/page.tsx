@@ -115,6 +115,13 @@ type DemoSession = {
   town: string;
 };
 
+type AuthAccount = DemoSession & {
+  id: string;
+  role: Role;
+  password: string;
+  createdAt: string;
+};
+
 type ProfileData = DemoSession & {
   phone: string;
   postalCode: string;
@@ -185,6 +192,7 @@ type WebMcpDocument = Document & {
 };
 
 const sessionKey = 'riskeo-demo-session-v2';
+const accountsKey = 'riskeo-auth-accounts-v1';
 const onboardingKey = 'riskeo-onboarding-seen-v2';
 const profileKey = 'riskeo-citizen-profile-v1';
 const helpRequestsKey = 'riskeo-help-requests-v1';
@@ -195,6 +203,28 @@ const defaultSession: DemoSession = {
   email: 'lucas.martin@demo.local',
   town: 'Fondettes',
 };
+
+const demoPassword = 'demo-riskeo';
+
+const defaultAuthAccounts: AuthAccount[] = [
+  {
+    ...defaultSession,
+    id: 'lucas-demo',
+    role: 'citoyen',
+    password: demoPassword,
+    createdAt: '2026-09-01',
+  },
+  {
+    id: 'mairie-fondettes-demo',
+    firstName: 'Mairie',
+    lastName: 'Fondettes',
+    email: 'mairie@fondettes.fr',
+    town: 'Fondettes',
+    role: 'mairie',
+    password: demoPassword,
+    createdAt: '2026-09-01',
+  },
+];
 
 const defaultAvailability = {
   Lundi: { morning: false, afternoon: false, evening: false },
@@ -838,6 +868,7 @@ export default function Home() {
     useState<ProfileSection>('info');
   const [authMode, setAuthMode] = useState<AuthMode>('login');
   const [session, setSession] = useState<DemoSession | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -896,11 +927,25 @@ export default function Home() {
     const timer = window.setTimeout(() => {
       const stored = window.localStorage.getItem(sessionKey);
       if (stored) {
-        setSession(JSON.parse(stored) as DemoSession);
+        try {
+          const restoredSession = JSON.parse(stored) as DemoSession & {
+            role?: Role;
+          };
+          setSession(restoredSession);
+          setRole(restoredSession.role ?? 'citoyen');
+          setAuthReady(true);
+        } catch {
+          window.localStorage.removeItem(sessionKey);
+          seedDefaultAccounts();
+          setShowAuth(true);
+          setAuthReady(true);
+        }
         return;
       }
 
+      seedDefaultAccounts();
       setShowAuth(true);
+      setAuthReady(true);
     }, 0);
 
     return () => window.clearTimeout(timer);
@@ -964,12 +1009,17 @@ export default function Home() {
     return () => lifecycle.abort();
   }, []);
 
-  function completeAuth(data: DemoSession = defaultSession) {
-    window.localStorage.setItem(sessionKey, JSON.stringify(data));
+  function completeAuth(data: DemoSession = defaultSession, nextRole: Role) {
+    window.localStorage.setItem(
+      sessionKey,
+      JSON.stringify({ ...data, role: nextRole }),
+    );
     setSession(data);
+    setRole(nextRole);
     setShowAuth(false);
+    setAuthReady(true);
 
-    if (!window.localStorage.getItem(onboardingKey)) {
+    if (nextRole === 'citoyen' && !window.localStorage.getItem(onboardingKey)) {
       setOnboardingStep(0);
       setShowOnboarding(true);
     }
@@ -989,7 +1039,7 @@ export default function Home() {
   }
 
   function updateSession(data: DemoSession) {
-    window.localStorage.setItem(sessionKey, JSON.stringify(data));
+    window.localStorage.setItem(sessionKey, JSON.stringify({ ...data, role }));
     setSession(data);
   }
 
@@ -1102,11 +1152,27 @@ export default function Home() {
     setMissionCreditNotice(earnedCredits);
   }
 
+  if (!authReady || !session) {
+    return (
+      <main className="min-h-screen bg-[#F7F5F0] text-[#173328]">
+        {authReady ? (
+          <AuthModal
+            authMode={authMode}
+            onModeChange={setAuthMode}
+            onSubmit={completeAuth}
+          />
+        ) : (
+          <AuthLoadingView />
+        )}
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#F7F5F0] pb-20 text-[#173328] md:pb-0">
       <ProductHeader
         activeTab={activeTab}
-        session={session ?? defaultSession}
+        session={session}
         showUserMenu={showUserMenu}
         onLogout={logout}
         onMairieAccess={() => {
@@ -1125,7 +1191,7 @@ export default function Home() {
           passes={passes}
           reports={reports}
           selectedReport={selectedReport}
-          session={session ?? defaultSession}
+          session={session}
           transactions={transactions}
           credits={credits}
           missionCreditNotice={missionCreditNotice}
@@ -1727,96 +1793,368 @@ function AuthModal({
 }: {
   authMode: AuthMode;
   onModeChange: (mode: AuthMode) => void;
-  onSubmit: (session?: DemoSession) => void;
+  onSubmit: (session: DemoSession, role: Role) => void;
 }) {
+  const [selectedRole, setSelectedRole] = useState<Role>('citoyen');
+  const [errors, setErrors] = useState<
+    Partial<Record<'email' | 'password' | 'confirm' | 'auth', string>>
+  >({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  function switchMode(mode: AuthMode) {
+    setErrors({});
+    setIsSubmitting(false);
+    onModeChange(mode);
+  }
+
   function submit(event: FormSubmitEvent) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const email = formString(formData, 'email', '').trim().toLowerCase();
+    const password = formString(formData, 'password', '');
+    const nextErrors: typeof errors = {};
+
+    if (!email.includes('@')) {
+      nextErrors.email = 'Indiquez une adresse email valide.';
+    }
+
+    if (password.length < 6) {
+      nextErrors.password =
+        'Le mot de passe doit contenir au moins 6 caractères.';
+    }
 
     if (authMode === 'signup') {
-      onSubmit({
-        firstName: formString(formData, 'firstName', 'Lucas'),
-        lastName: formString(formData, 'lastName', 'Martin'),
-        email: formString(formData, 'email', defaultSession.email),
-        town: formString(formData, 'town', 'Fondettes'),
-      });
+      const confirmPassword = formString(formData, 'confirmPassword', '');
+      const accounts = getAuthAccounts();
+
+      if (password !== confirmPassword) {
+        nextErrors.confirm = 'Les deux mots de passe doivent être identiques.';
+      }
+
+      if (accounts.some((account) => account.email.toLowerCase() === email)) {
+        nextErrors.email = 'Un compte existe déjà avec cette adresse.';
+      }
+
+      if (Object.keys(nextErrors).length > 0) {
+        setErrors(nextErrors);
+        return;
+      }
+
+      const account: AuthAccount = {
+        id: `account-${Date.now()}`,
+        firstName: formString(formData, 'firstName', 'Lucas').trim(),
+        lastName: formString(formData, 'lastName', 'Martin').trim(),
+        email,
+        town: formString(formData, 'town', 'Fondettes').trim(),
+        role: selectedRole,
+        password,
+        createdAt: new Date().toISOString(),
+      };
+
+      setIsSubmitting(true);
+      window.setTimeout(() => {
+        saveAuthAccounts([account, ...accounts]);
+        onSubmit(toSession(account), account.role);
+      }, 350);
       return;
     }
 
-    onSubmit(defaultSession);
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
+      return;
+    }
+
+    const account = findAuthAccount(email);
+    if (!account || account.password !== password) {
+      setErrors({ auth: 'Email ou mot de passe incorrect.' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    window.setTimeout(() => {
+      onSubmit(toSession(account), account.role);
+    }, 350);
+  }
+
+  function signInDemo(nextRole: Role) {
+    const account =
+      defaultAuthAccounts.find((candidate) => candidate.role === nextRole) ??
+      defaultAuthAccounts[0];
+
+    setIsSubmitting(true);
+    window.setTimeout(() => {
+      onSubmit(toSession(account), account.role);
+    }, 250);
   }
 
   return (
     <ModalShell>
-      <div className="w-full max-w-[520px] rounded-lg bg-[#FFFDF8] p-5 shadow-2xl sm:p-7">
-        <div className="flex items-center justify-between gap-4">
-          <Image
-            src="/brand/logo-horizontal.png"
-            alt="Riskéo"
-            width={391}
-            height={120}
-            className="h-14 w-auto"
-          />
-        </div>
-        <h2 className="mt-6 text-2xl font-extrabold">Bienvenue sur Riskéo</h2>
-        <p className="mt-2 text-[#5B7867]">
-          Ensemble, protégeons notre territoire.
-        </p>
-
-        <div className="mt-5 grid grid-cols-2 gap-2 rounded-md bg-[#F7F5F0] p-1">
-          <AuthTab
-            active={authMode === 'login'}
-            label="Se connecter"
-            onClick={() => onModeChange('login')}
-          />
-          <AuthTab
-            active={authMode === 'signup'}
-            label="Créer un compte"
-            onClick={() => onModeChange('signup')}
-          />
-        </div>
-
-        <form className="mt-5 space-y-4" onSubmit={submit}>
-          {authMode === 'signup' ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label="Prénom">
-                <Input name="firstName" defaultValue="Lucas" required />
-              </Field>
-              <Field label="Nom">
-                <Input name="lastName" defaultValue="Martin" required />
-              </Field>
+      <div className="max-h-[92vh] w-full max-w-[880px] overflow-y-auto rounded-lg bg-[#FFFDF8] shadow-2xl">
+        <div className="grid min-h-[620px] lg:grid-cols-[0.9fr_1.1fr]">
+          <section className="hidden bg-[#1E3D2F] p-7 text-white lg:flex lg:flex-col lg:justify-between">
+            <div>
+              <Image
+                src="/brand/logo-empile.png"
+                alt="Riskéo"
+                width={244}
+                height={174}
+                className="h-24 w-auto rounded-md bg-white/95 p-2"
+                priority
+              />
+              <h1 className="mt-8 text-3xl font-extrabold leading-tight">
+                Chaque signalement compte.
+              </h1>
+              <p className="mt-4 text-sm font-medium leading-6 text-[#DCEBDF]">
+                Connectez-vous pour signaler un risque, suivre vos missions ou
+                piloter les interventions de la commune.
+              </p>
             </div>
-          ) : null}
-          <Field label="Email">
-            <Input
-              name="email"
-              type="email"
-              defaultValue={defaultSession.email}
-              required
-            />
-          </Field>
-          <Field label="Mot de passe">
-            <Input name="password" type="password" defaultValue="demo-riskeo" />
-          </Field>
-          {authMode === 'signup' ? (
-            <Field label="Commune">
-              <Input name="town" defaultValue="Fondettes" required />
-            </Field>
-          ) : (
-            <label className="flex items-center gap-2 text-sm font-semibold">
-              <input type="checkbox" defaultChecked />
-              Se souvenir de moi
-            </label>
-          )}
-          <Button
-            type="submit"
-            className="h-11 w-full rounded-md bg-[#1E3D2F] text-white hover:bg-[#123426]"
-          >
-            {authMode === 'signup' ? 'Créer mon compte' : 'Se connecter'}
-          </Button>
-        </form>
+            <div className="grid gap-3 text-sm font-semibold">
+              <AuthProof
+                icon={Shield}
+                label="Session conservée sur cet appareil"
+              />
+              <AuthProof
+                icon={MapPin}
+                label="Données de démonstration Fondettes"
+              />
+              <AuthProof
+                icon={Users}
+                label="Espaces citoyen et mairie séparés"
+              />
+            </div>
+          </section>
+
+          <section className="p-5 sm:p-7">
+            <div className="flex items-center justify-between gap-4">
+              <Image
+                src="/brand/logo-horizontal.png"
+                alt="Riskéo"
+                width={391}
+                height={120}
+                className="h-14 w-auto"
+                priority
+              />
+            </div>
+            <h2 className="mt-6 text-2xl font-extrabold">
+              {authMode === 'signup'
+                ? 'Créer votre compte Riskéo'
+                : 'Connexion à Riskéo'}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-[#5B7867]">
+              {authMode === 'signup'
+                ? 'Choisissez votre espace et créez un accès de test.'
+                : 'Utilisez un compte de démo ou connectez-vous avec un compte déjà créé.'}
+            </p>
+
+            <div className="mt-5 grid grid-cols-2 gap-2 rounded-md bg-[#F7F5F0] p-1">
+              <AuthTab
+                active={authMode === 'login'}
+                label="Se connecter"
+                onClick={() => switchMode('login')}
+              />
+              <AuthTab
+                active={authMode === 'signup'}
+                label="Créer un compte"
+                onClick={() => switchMode('signup')}
+              />
+            </div>
+
+            {authMode === 'login' ? (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <button
+                  className="rounded-md border border-[#D9DDD8] bg-[#F7F5F0] p-4 text-left transition hover:border-[#5BA681] hover:bg-white"
+                  type="button"
+                  onClick={() => signInDemo('citoyen')}
+                >
+                  <span className="block text-sm font-extrabold text-[#1E3D2F]">
+                    Lucas citoyen
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold text-[#5B7867]">
+                    Signaler, missions, crédits
+                  </span>
+                </button>
+                <button
+                  className="rounded-md border border-[#D9DDD8] bg-[#F7F5F0] p-4 text-left transition hover:border-[#5BA681] hover:bg-white"
+                  type="button"
+                  onClick={() => signInDemo('mairie')}
+                >
+                  <span className="block text-sm font-extrabold text-[#1E3D2F]">
+                    Mairie de Fondettes
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold text-[#5B7867]">
+                    Tableau de bord, priorisation
+                  </span>
+                </button>
+              </div>
+            ) : null}
+
+            <form key={authMode} className="mt-5 space-y-4" onSubmit={submit}>
+              {authMode === 'signup' ? (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Field label="Prénom">
+                      <Input name="firstName" defaultValue="Lucas" required />
+                    </Field>
+                    <Field label="Nom">
+                      <Input name="lastName" defaultValue="Martin" required />
+                    </Field>
+                  </div>
+                  <Field label="Type de compte">
+                    <div className="grid grid-cols-2 gap-2">
+                      <RoleChoice
+                        active={selectedRole === 'citoyen'}
+                        icon={User}
+                        label="Citoyen"
+                        onClick={() => setSelectedRole('citoyen')}
+                      />
+                      <RoleChoice
+                        active={selectedRole === 'mairie'}
+                        icon={Building2}
+                        label="Mairie"
+                        onClick={() => setSelectedRole('mairie')}
+                      />
+                    </div>
+                  </Field>
+                </>
+              ) : null}
+
+              <Field label="Email" error={errors.email}>
+                <Input
+                  name="email"
+                  type="email"
+                  defaultValue={
+                    authMode === 'signup' ? '' : defaultSession.email
+                  }
+                  placeholder="lucas.martin@demo.local"
+                  autoComplete="email"
+                  required
+                />
+              </Field>
+              <Field label="Mot de passe" error={errors.password}>
+                <Input
+                  name="password"
+                  type="password"
+                  defaultValue={authMode === 'signup' ? '' : demoPassword}
+                  autoComplete={
+                    authMode === 'signup' ? 'new-password' : 'current-password'
+                  }
+                  required
+                />
+              </Field>
+              {authMode === 'signup' ? (
+                <>
+                  <Field
+                    label="Confirmer le mot de passe"
+                    error={errors.confirm}
+                  >
+                    <Input
+                      name="confirmPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      required
+                    />
+                  </Field>
+                  <Field label="Commune">
+                    <Input name="town" defaultValue="Fondettes" required />
+                  </Field>
+                </>
+              ) : (
+                <label className="flex items-center gap-2 text-sm font-semibold">
+                  <input
+                    className="size-4 accent-[#1E3D2F]"
+                    type="checkbox"
+                    defaultChecked
+                  />
+                  Se souvenir de moi
+                </label>
+              )}
+
+              {errors.auth ? (
+                <div className="rounded-md border border-[#F2B29B] bg-[#FFF3EF] px-3 py-2 text-sm font-semibold text-[#9E3B1E]">
+                  {errors.auth}
+                </div>
+              ) : null}
+
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="h-11 w-full rounded-md bg-[#1E3D2F] text-white hover:bg-[#123426]"
+              >
+                {isSubmitting
+                  ? authMode === 'signup'
+                    ? 'Création...'
+                    : 'Connexion...'
+                  : authMode === 'signup'
+                    ? 'Créer mon compte'
+                    : 'Se connecter'}
+              </Button>
+
+              <p className="text-center text-xs font-semibold text-[#78907D]">
+                Prototype : les comptes sont conservés uniquement sur ce
+                navigateur.
+              </p>
+            </form>
+          </section>
+        </div>
       </div>
     </ModalShell>
+  );
+}
+
+function AuthProof({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-md bg-white/10 p-3">
+      <Icon size={18} />
+      {label}
+    </div>
+  );
+}
+
+function RoleChoice({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: LucideIcon;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`flex h-12 items-center justify-center gap-2 rounded-md border text-sm font-extrabold transition ${
+        active
+          ? 'border-[#1E3D2F] bg-[#1E3D2F] text-white'
+          : 'border-[#D9DDD8] bg-white text-[#5B7867] hover:border-[#5BA681]'
+      }`}
+      type="button"
+      onClick={onClick}
+    >
+      <Icon size={17} />
+      {label}
+    </button>
+  );
+}
+
+function AuthLoadingView() {
+  return (
+    <div className="grid min-h-screen place-items-center p-6">
+      <div className="text-center">
+        <Image
+          src="/brand/logo-empile.png"
+          alt="Riskéo"
+          width={244}
+          height={174}
+          className="mx-auto h-24 w-auto object-contain"
+          priority
+        />
+        <p className="mt-4 text-sm font-bold text-[#5B7867]">
+          Préparation de votre espace...
+        </p>
+      </div>
+    </div>
   );
 }
 
@@ -5898,6 +6236,67 @@ function findPartner(partnerId: string): Partner {
       isDemoPartner: true,
     }
   );
+}
+
+function toSession(account: AuthAccount): DemoSession {
+  return {
+    firstName: account.firstName,
+    lastName: account.lastName,
+    email: account.email,
+    town: account.town,
+  };
+}
+
+function seedDefaultAccounts() {
+  saveAuthAccounts(getAuthAccounts());
+}
+
+function getAuthAccounts(): AuthAccount[] {
+  if (typeof window === 'undefined') {
+    return defaultAuthAccounts;
+  }
+
+  const storedAccounts = window.localStorage.getItem(accountsKey);
+  if (!storedAccounts) {
+    return defaultAuthAccounts;
+  }
+
+  try {
+    const parsedAccounts = JSON.parse(storedAccounts) as AuthAccount[];
+    if (!Array.isArray(parsedAccounts)) {
+      return defaultAuthAccounts;
+    }
+
+    return mergeDemoAccounts(parsedAccounts);
+  } catch {
+    return defaultAuthAccounts;
+  }
+}
+
+function saveAuthAccounts(accounts: AuthAccount[]) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(accountsKey, JSON.stringify(accounts));
+}
+
+function findAuthAccount(email: string) {
+  const normalizedEmail = email.toLowerCase();
+  return getAuthAccounts().find(
+    (account) => account.email.toLowerCase() === normalizedEmail,
+  );
+}
+
+function mergeDemoAccounts(accounts: AuthAccount[]) {
+  const knownEmails = new Set(
+    accounts.map((account) => account.email.toLowerCase()),
+  );
+  const missingDemoAccounts = defaultAuthAccounts.filter(
+    (account) => !knownEmails.has(account.email.toLowerCase()),
+  );
+
+  return [...accounts, ...missingDemoAccounts];
 }
 
 function getNextReward(balance: number) {
